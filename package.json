@@ -9,5 +9,9 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs"
+  "type": "commonjs",
+  "dependencies": {
+    "@deriv/deriv-api": "^1.0.15",
+    "ws": "^8.22.0"
+  }
 }
