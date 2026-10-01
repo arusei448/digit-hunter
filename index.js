@@ -1,25 +1,172 @@
-console.log("STEP 1: script started");
-
 const WebSocket = require('ws');
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
 
-const connection = new WebSocket('wss://api.derivws.com/trading/v1/options/ws/public');
+const MARKETS = {
+    '1HZ10V': 'Volatility 100 (1s) Index',
+    '1HZ25V': 'Volatility 25 (1s) Index',
+    '1HZ50V': 'Volatility 50 (1s) Index',
+    '1HZ75V': 'Volatility 75 (1s) Index',
+    '1HZ100V': 'Volatility 100 (1s) Index',
+    'R_10': 'Volatility 10 Index',
+    'R_25': 'Volatility 25 Index',
+    'R_50': 'Volatility 50 Index',
+    'R_75': 'Volatility 75 Index',
+    'R_100': 'Volatility 100 Index'
+};
 
-connection.on('open', () => {
-    console.log("STEP 2: websocket OPEN");
-    connection.send(JSON.stringify({ "ticks": "R_50", "subscribe": 1 }));
-    console.log("STEP 3: sent ticks request for R_50");
+let currentSymbol = '1HZ10V';
+let latestTick = null;
+let previousQuote = null;
+let historicalTicks = [];
+let historyResolvers = [];
+const sseClients = new Set();
+
+const WS_URL = 'wss://api.derivws.com/trading/v1/options/ws/public';
+const PORT = process.env.PORT || 3000;
+
+// Helper: returns a promise that resolves with historical ticks
+function fetchHistory(symbol) {
+    return new Promise((resolve) => {
+        historyResolvers.push(resolve);
+        ws.send(JSON.stringify({
+            ticks_history: symbol,
+            end: 'latest',
+            start: 0,
+            style: 'ticks',
+            count: 1000
+        }));
+    });
+}
+
+const server = http.createServer(async (req, res) => {
+    if (req.url === '/stream') {
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'Access-Control-Allow-Origin': '*'
+        });
+
+        if (latestTick) {
+            res.write(`data: ${JSON.stringify(latestTick)}\n\n`);
+        }
+
+        sseClients.add(res);
+
+        req.on('close', () => {
+            sseClients.delete(res);
+        });
+        return;
+    }
+
+    if (req.url.startsWith('/switch')) {
+        const url = new URL(req.url, `http://localhost:${PORT}`);
+        const newSymbol = url.searchParams.get('symbol');
+        if (newSymbol && MARKETS[newSymbol]) {
+            currentSymbol = newSymbol;
+            previousQuote = null;
+            latestTick = null;
+            historicalTicks = [];
+
+            ws.send(JSON.stringify({ forget_all: 'ticks' }));
+
+            // Fetch history and wait for it
+            const ticks = await fetchHistory(newSymbol);
+            historicalTicks = ticks;
+
+            ws.send(JSON.stringify({ ticks: newSymbol, subscribe: 1 }));
+            console.log('Switched to:', newSymbol, 'with', ticks.length, 'history ticks');
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ symbol: currentSymbol, historyCount: historicalTicks.length }));
+        return;
+    }
+
+    if (req.url === '/history') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ history: historicalTicks, symbol: currentSymbol }));
+        return;
+    }
+
+    if (req.url === '/markets') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ markets: MARKETS, current: currentSymbol }));
+        return;
+    }
+
+    let filePath = req.url === '/' ? '/index.html' : req.url;
+    filePath = path.join(__dirname, 'site', filePath);
+
+    fs.readFile(filePath, (err, data) => {
+        if (err) {
+            res.writeHead(404);
+            res.end('Not found');
+            return;
+        }
+        const ext = path.extname(filePath);
+        const types = {
+            '.html': 'text/html',
+            '.js': 'application/javascript',
+            '.css': 'text/css'
+        };
+        res.writeHead(200, { 'Content-Type': types[ext] || 'text/plain' });
+        res.end(data);
+    });
 });
 
-connection.on('message', (data) => {
-    const response = JSON.parse(data);
-    if (response.tick) {
-        const quote = response.tick.quote;
-        const lastDigit = quote.toString().slice(-1);
-        console.log(`TICK: ${quote} | Last Digit: ${lastDigit}`);
-    } else {
-        console.log("RAW:", JSON.stringify(response));
+const ws = new WebSocket(WS_URL);
+
+ws.on('open', () => {
+    console.log('Connected to Deriv public gateway');
+    fetchHistory(currentSymbol).then(ticks => {
+        historicalTicks = ticks;
+        console.log(`Loaded ${ticks.length} initial ticks for ${currentSymbol}`);
+    });
+    ws.send(JSON.stringify({ ticks: currentSymbol, subscribe: 1 }));
+});
+
+ws.on('message', (data) => {
+    const msg = JSON.parse(data);
+
+    if (msg.msg_type === 'history' && msg.history && msg.history.prices) {
+        const ticks = msg.history.prices.map((price, i) => ({
+            quote: price,
+            digit: parseInt(price.toString().slice(-1)),
+            timestamp: msg.history.times[i],
+            trend: 'flat'
+        }));
+        // Resolve any pending history requests
+        while (historyResolvers.length > 0) {
+            const resolve = historyResolvers.shift();
+            resolve(ticks);
+        }
+        return;
+    }
+
+    if (msg.tick && msg.tick.quote) {
+        const quote = msg.tick.quote;
+        const trend = previousQuote === null ? 'flat' : (quote > previousQuote ? 'up' : quote < previousQuote ? 'down' : 'flat');
+        previousQuote = quote;
+
+        latestTick = {
+            quote: quote,
+            digit: parseInt(quote.toString().slice(-1)),
+            timestamp: msg.tick.epoch || Math.floor(Date.now() / 1000),
+            trend: trend,
+            symbol: currentSymbol,
+            receivedAt: Date.now()
+        };
+
+        const payload = `data: ${JSON.stringify(latestTick)}\n\n`;
+        for (const client of sseClients) {
+            client.write(payload);
+        }
     }
 });
 
-connection.on('error', (e) => console.log("ERROR:", e.message));
-connection.on('close', () => console.log("STEP 4: websocket closed"));
+ws.on('error', (err) => console.log('WS Error:', err.message));
+ws.on('close', () => console.log('WS closed'));
+
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));

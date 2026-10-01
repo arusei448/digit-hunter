@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deriv Digits Dashboard</title>
+    <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f1117;
+            color: #e8eaed;
+        }
+        .app {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 16px;
+        }
+        .card {
+            background: #1a1d24;
+            border: 1px solid #2a2e37;
+            border-radius: 12px;
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+        /* Header */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            background: #1a1d24;
+            border: 1px solid #2a2e37;
+            border-radius: 12px;
+            margin-bottom: 16px;
+        }
+        .market-info { display: flex; align-items: center; gap: 12px; }
+        .market-icon {
+            width: 40px; height: 40px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #1e3a5f, #0d1b2a);
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 700; color: #4a9eff; font-size: 14px;
+            border: 1px solid #2a4a6f;
+        }
+        .market-name { font-size: 15px; font-weight: 600; color: #fff; }
+        .market-sub { font-size: 12px; color: #8892a0; margin-top: 2px; display: flex; align-items: center; gap: 6px; }
+        .market-selector {
+            background: #0f1117;
+            border: 1px solid #2a2e37;
+            border-radius: 6px;
+            color: #e8eaed;
+            padding: 8px 12px;
+            font-size: 13px;
+            cursor: pointer;
+            outline: none;
+            margin-left: 12px;
+        }
+        .market-selector:hover { border-color: #4a9eff; }
+        .price-block { display: flex; align-items: center; gap: 12px; }
+        .price-value { font-size: 22px; font-weight: 700; transition: color 0.2s; color: #fff; }
+        .price-value.up { color: #00c853; }
+        .price-value.down { color: #ff5252; }
+        .price-arrow { font-size: 16px; }
+        .price-arrow.up { color: #00c853; }
+        .price-arrow.down { color: #ff5252; }
+        .live-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: #00c853;
+            animation: pulse 1.5s infinite;
+        }
+        .live-dot.stale { background: #ff5252; animation: none; }
+        @keyframes pulse { 0%{opacity:1} 50%{opacity:0.3} 100%{opacity:1} }
+        .last-update { font-size: 11px; color: #6b7280; }
+        /* Chart */
+        #chart-container { width: 100%; height: 360px; }
+        /* Timeframe */
+        .timeframe-bar {
+            display: flex; gap: 8px;
+            padding: 12px 20px;
+            border-bottom: 1px solid #2a2e37;
+            flex-wrap: wrap;
+        }
+        .tf-btn {
+            padding: 6px 14px; border-radius: 6px;
+            border: 1px solid #2a2e37; background: #0f1117;
+            font-size: 12px; font-weight: 500; cursor: pointer;
+            color: #8892a0; transition: all 0.15s;
+        }
+        .tf-btn:hover { background: #232730; color: #e8eaed; }
+        .tf-btn.active { background: #4a9eff; color: #fff; border-color: #4a9eff; }
+        /* Digits */
+        .digits-section { padding: 20px; }
+        .digits-title, .history-title {
+            font-size: 12px; font-weight: 600; color: #8892a0;
+            margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .digits-row { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+        .digit-circle {
+            flex: 1; min-width: 60px; aspect-ratio: 1;
+            border-radius: 50%; background: #232730;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 20px; color: #e8eaed;
+            border: 3px solid #2a2e37; transition: all 0.25s ease;
+        }
+        .digit-circle.latest { border-color: #4a9eff; background: #1a2a3f; color: #4a9eff; transform: scale(1.05); }
+        .digit-circle.hot { border-color: #00c853; background: #122318; color: #00c853; }
+        .digit-circle.cold { border-color: #ff5252; background: #2a1215; color: #ff5252; }
+        .digit-percent { font-size: 10px; font-weight: 500; color: #6b7280; margin-top: 1px; }
+        /* History */
+        .history-section { padding: 16px 20px; border-top: 1px solid #2a2e37; }
+        .history-strip { display: flex; gap: 6px; flex-wrap: wrap; min-height: 32px; }
+        .history-pill {
+            width: 30px; height: 30px; border-radius: 50%;
+            background: #232730; display: flex; align-items: center; justify-content: center;
+            font-size: 13px; font-weight: 600; color: #e8eaed;
+            animation: slideIn 0.3s ease;
+        }
+        .history-pill.d0, .history-pill.d5 { background: #2a2e37; }
+        .history-pill.d1, .history-pill.d6 { background: #1e3a5f; }
+        .history-pill.d2, .history-pill.d7 { background: #122318; }
+        .history-pill.d3, .history-pill.d8 { background: #2a2318; }
+        .history-pill.d4, .history-pill.d9 { background: #2a1215; }
+        @keyframes slideIn { from{opacity:0;transform:scale(0.5)} to{opacity:1;transform:scale(1)} }
+        /* Stats */
+        .stats-bar {
+            display: flex; justify-content: space-around;
+            padding: 16px 20px; background: #14161c;
+            border-top: 1px solid #2a2e37; font-size: 13px;
+        }
+        .stat-item { text-align: center; }
+        .stat-label { color: #6b7280; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+        .stat-value { font-weight: 700; font-size: 16px; color: #fff; }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <div class="header">
+            <div class="market-info">
+                <div class="market-icon" id="market-icon">100</div>
+                <div>
+                    <div class="market-name" id="market-name">Volatility 100 (1s) Index</div>
+                    <div class="market-sub">
+                        <span class="live-dot" id="live-dot"></span>
+                        <span id="stream-status">Live</span>
+                        <span class="last-update" id="last-update">--</span>
+                    </div>
+                </div>
+                <select class="market-selector" id="market-select">
+                    <option value="1HZ10V">Volatility 100 (1s)</option>
+                    <option value="1HZ25V">Volatility 25 (1s)</option>
+                    <option value="1HZ50V">Volatility 50 (1s)</option>
+                    <option value="1HZ75V">Volatility 75 (1s)</option>
+                    <option value="1HZ100V">Volatility 100 (1s)</option>
+                    <option value="R_10">Volatility 10</option>
+                    <option value="R_25">Volatility 25</option>
+                    <option value="R_50">Volatility 50</option>
+                    <option value="R_75">Volatility 75</option>
+                    <option value="R_100">Volatility 100</option>
+                </select>
+            </div>
+            <div class="price-block">
+                <span class="price-arrow" id="price-arrow">—</span>
+                <span class="price-value" id="price">--</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <div id="chart-container"></div>
+        </div>
+
+        <div class="card">
+            <div class="timeframe-bar">
+                <button class="tf-btn" data-tf="50">Last 50 ticks</button>
+                <button class="tf-btn" data-tf="100">Last 100 ticks</button>
+                <button class="tf-btn active" data-tf="200">Last 200 ticks</button>
+                <button class="tf-btn" data-tf="500">Last 500 ticks</button>
+                <button class="tf-btn" data-tf="1000">Last 1000 ticks</button>
+            </div>
+            <div class="digits-section">
+                <div class="digits-title">Digit Distribution</div>
+                <div class="digits-row" id="digits"></div>
+            </div>
+            <div class="history-section">
+                <div class="history-title">Recent Digits</div>
+                <div class="history-strip" id="history"></div>
+            </div>
+            <div class="stats-bar">
+                <div class="stat-item">
+                    <div class="stat-label">Total Ticks</div>
+                    <div class="stat-value" id="total-ticks">0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Latest Digit</div>
+                    <div class="stat-value" id="latest-digit">--</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Most Frequent</div>
+                    <div class="stat-value" id="hot-digit">--</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Least Frequent</div>
+                    <div class="stat-value" id="cold-digit">--</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="/app.js"></script>
+</body>
+</html>

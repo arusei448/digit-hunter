@@ -2,3 +2,10 @@ modules = ["nodejs-24"]
 
 [nix]
 channel = "stable-25_05"
+
+[[ports]]
+localPort = 3000
+externalPort = 80
+
+[objectStorage]
+defaultBucketID = "replit-objstore-26de43db-99d6-4562-86f0-b47db5fc5f61"
