@@ -1,0 +1,1 @@
+- [Deriv quote precision](deriv-quote-precision.md) — pad quote strings to the API's pip_size before extracting the last digit, or trailing zero digits disappear.

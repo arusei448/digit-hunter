@@ -1,217 +1,247 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rise & Fall Analysis</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #0f1117;
-            color: #e8eaed;
-            min-height: 100vh;
-        }
-        .app { max-width: 1200px; margin: 0 auto; padding: 24px; }
-        .header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 24px;
-        }
-        .header h1 { font-size: 22px; font-weight: 700; color: #fff; }
-        .live-badge {
-            display: flex; align-items: center; gap: 6px;
-            background: #122318; padding: 6px 12px;
-            border-radius: 20px; font-size: 12px; color: #00c853;
-            font-weight: 600;
-        }
-        .live-dot {
-            width: 8px; height: 8px; border-radius: 50%;
-            background: #00c853; animation: pulse 1.5s infinite;
-        }
-        @keyframes pulse { 0%{opacity:1} 50%{opacity:0.3} 100%{opacity:1} }
-        .controls {
-            display: flex; gap: 16px; flex-wrap: wrap;
-            align-items: center; justify-content: space-between;
-            background: #1a1d24; border: 1px solid #2a2e37;
-            border-radius: 12px; padding: 16px 20px; margin-bottom: 20px;
-        }
-        .control-group { display: flex; align-items: center; gap: 10px; }
-        .control-label { font-size: 13px; color: #8892a0; font-weight: 500; }
-        select, .tf-btn {
-            background: #0f1117; border: 1px solid #2a2e37;
-            color: #e8eaed; padding: 8px 14px; border-radius: 8px;
-            font-size: 13px; cursor: pointer; outline: none;
-        }
-        select:hover, .tf-btn:hover { border-color: #4a9eff; }
-        .tf-btn.active { background: #4a9eff; color: #fff; border-color: #4a9eff; }
-        .price-display { display: flex; align-items: center; gap: 10px; }
-        .price-value { font-size: 24px; font-weight: 700; color: #fff; }
-        .digit-badge {
-            width: 40px; height: 40px; border-radius: 50%;
-            background: #00c853; color: #fff;
-            display: flex; align-items: center; justify-content: center;
-            font-weight: 700; font-size: 18px;
-        }
-        .stats-grid {
-            display: grid; grid-template-columns: repeat(3, 1fr);
-            gap: 16px; margin-bottom: 20px;
-        }
-        .stat-card {
-            background: #1a1d24; border: 1px solid #2a2e37;
-            border-radius: 12px; padding: 20px; text-align: center;
-        }
-        .stat-label { font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
-        .stat-value { font-size: 22px; font-weight: 700; }
-        .stat-value.green { color: #00c853; }
-        .stat-value.red { color: #ff5252; }
-        .stat-value.blue { color: #4a9eff; }
-        .direction-grid {
-            display: grid; grid-template-columns: 1fr 1fr;
-            gap: 16px; margin-bottom: 20px;
-        }
-        .direction-card {
-            background: #1a1d24; border: 1px solid #2a2e37;
-            border-radius: 12px; padding: 20px;
-        }
-        .direction-title { font-size: 16px; font-weight: 700; margin-bottom: 12px; }
-        .direction-title.rise { color: #00c853; }
-        .direction-title.fall { color: #ff5252; }
-        .progress-bar {
-            width: 100%; height: 10px; background: #232730;
-            border-radius: 5px; overflow: hidden; margin-bottom: 12px;
-        }
-        .progress-fill {
-            height: 100%; transition: width 0.3s ease;
-        }
-        .progress-fill.rise { background: #00c853; }
-        .progress-fill.fall { background: #ff5252; }
-        .direction-counts {
-            display: flex; justify-content: space-between;
-            font-size: 14px; font-weight: 600; margin-bottom: 8px;
-        }
-        .direction-note { font-size: 12px; color: #6b7280; line-height: 1.5; }
-        .stream-section {
-            background: #1a1d24; border: 1px solid #2a2e37;
-            border-radius: 12px; padding: 20px;
-        }
-        .stream-title {
-            font-size: 12px; color: #6b7280; text-transform: uppercase;
-            letter-spacing: 0.5px; margin-bottom: 12px;
-        }
-        .stream-bars {
-            display: flex; gap: 4px; align-items: flex-end;
-            height: 60px;
-        }
-        .stream-bar {
-            flex: 1; border-radius: 3px 3px 0 0;
-            transition: height 0.2s ease, background 0.2s ease;
-            min-height: 8px;
-        }
-        .stream-bar.rise { background: #00c853; height: 100%; }
-        .stream-bar.fall { background: #ff5252; height: 40%; }
-        .stream-legend {
-            display: flex; gap: 16px; margin-top: 10px;
-            font-size: 12px; color: #6b7280;
-        }
-        .legend-item { display: flex; align-items: center; gap: 6px; }
-        .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
-        @media (max-width: 768px) {
-            .stats-grid, .direction-grid { grid-template-columns: 1fr; }
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0f1117">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231a1d24'/%3E%3Cpath d='M8 40h11l7-21 10 27 7-17h13' fill='none' stroke='%2354c8d5' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <title>Rise &amp; Fall — Deriv Analytics</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg:#0f1117; --panel:#1a1d24; --panel-raised:#20242c; --panel-deep:#14161c;
+      --line:#2a2e37; --line-bright:#3a414d; --ink:#e8eaed; --muted:#8892a0; --quiet:#626c7b;
+      --cyan:#54c8d5; --cyan-soft:#16343a; --lime:#9bd56b; --lime-soft:#263622; --coral:#ed7772; --coral-soft:#3a2428;
+      --mono:"DM Mono","SFMono-Regular",Consolas,monospace; --sans:"DM Sans","Segoe UI",sans-serif; --radius:10px;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100dvh;color:var(--ink);background:var(--bg);font-family:var(--sans);font-size:14px;letter-spacing:.005em;background-image:radial-gradient(ellipse at 55% -27%,rgba(84,200,213,.075),transparent 55%)}
+    button,select{font:inherit}
+    button:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
+    .topbar{position:sticky;top:0;z-index:10;height:66px;background:rgba(15,17,23,.94);border-bottom:1px solid var(--line);backdrop-filter:blur(14px)}
+    .nav-inner{max-width:1400px;height:100%;margin:auto;padding:0 32px;display:flex;align-items:center;justify-content:space-between}
+    .brand{display:flex;gap:11px;align-items:center;color:var(--ink);text-decoration:none;font-weight:700;letter-spacing:-.035em}
+    .brand-mark{display:grid;place-items:center;width:31px;height:31px;border:1px solid #3b6268;background:#17292d;border-radius:8px;color:var(--cyan)}
+    .brand-mark svg{width:19px;height:19px}.brand-name{font-size:15px}.brand-name span{color:var(--muted);font-weight:500}
+    .nav-links{align-self:stretch;display:flex;align-items:center;gap:7px}
+    .nav-link{height:100%;display:inline-flex;align-items:center;padding:0 15px;color:var(--muted);text-decoration:none;border-bottom:2px solid transparent;font-size:13px;transition:color .16s ease,border-color .16s ease}
+    .nav-link:hover{color:var(--ink)}.nav-link.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+    .workspace{max-width:1400px;margin:0 auto;padding:31px 32px 42px}
+    .page-intro{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:21px}
+    .eyebrow{color:var(--cyan);font:500 10px var(--mono);letter-spacing:.16em;text-transform:uppercase;margin-bottom:9px}
+    h1{margin:0;font-size:clamp(25px,3vw,34px);line-height:1.1;letter-spacing:-.045em;font-weight:600}
+    .intro-copy{max-width:500px;margin:8px 0 0;color:var(--muted);font-size:13px;line-height:1.55}
+    .connection{display:inline-flex;align-items:center;gap:9px;white-space:nowrap;border:1px solid var(--line);border-radius:999px;padding:8px 12px;color:var(--muted);font:500 11px var(--mono);background:#15181e}
+    .live-dot{width:7px;height:7px;border-radius:50%;background:var(--lime);box-shadow:0 0 0 3px rgba(155,213,107,.11)}
+    .connection.live{color:var(--lime)}.connection.stale{color:#e8b978}.connection.stale .live-dot{background:#e8b978;box-shadow:0 0 0 3px rgba(232,185,120,.1)}
+    .connection.live .live-dot{animation:pulse 1.5s ease-in-out infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+    .connection.offline{color:var(--coral)}.connection.offline .live-dot{background:var(--coral);box-shadow:0 0 0 3px rgba(237,119,114,.1)}
+    .panel,.stat-card,.direction-card,.stream-section{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius)}
+    .controls{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:15px 18px;margin-bottom:16px}
+    .control-group{display:flex;align-items:center;gap:10px;min-width:0}
+    .control-caption{display:block;margin-bottom:5px;color:var(--quiet);font:500 9px var(--mono);letter-spacing:.1em;text-transform:uppercase}
+    select{min-width:196px;border:1px solid var(--line-bright);border-radius:6px;background:#13161c;color:var(--ink);padding:9px 30px 9px 11px;cursor:pointer;font-size:12px;transition:border-color .15s ease}
+    select:hover{border-color:#53777c}select:disabled{opacity:.58;cursor:progress}
+    .window-controls{display:flex;align-items:center;gap:5px}
+    .window-label{margin-right:5px;color:var(--quiet);font:500 9px var(--mono);letter-spacing:.09em;text-transform:uppercase}
+    .tf-btn{min-width:39px;height:32px;padding:0 11px;color:var(--muted);border:1px solid transparent;border-radius:5px;background:transparent;cursor:pointer;font:11px var(--mono);transition:color .15s ease,background .15s ease,border-color .15s ease}
+    .tf-btn:hover{color:var(--ink);background:#252a32}.tf-btn.active{color:var(--cyan);border-color:#31555a;background:var(--cyan-soft)}
+    .price-display{min-width:205px;padding-left:18px;border-left:1px solid var(--line)}
+    .price-line{display:flex;align-items:center;gap:9px}
+    .price-label{color:var(--quiet);font:500 9px var(--mono);letter-spacing:.1em;text-transform:uppercase}
+    .price-value{color:var(--ink);font:500 18px var(--mono);letter-spacing:-.045em;transition:color .2s ease}
+    .price-value.up{color:var(--lime)}.price-value.down{color:var(--coral)}
+    .digit-badge{display:grid;place-items:center;width:27px;height:27px;border:1px solid #3e656b;border-radius:6px;background:#193338;color:#8ce0e8;font:500 12px var(--mono)}
+    .quote-sub{margin-top:4px;color:var(--quiet);font:9px var(--mono)}
+    .error-banner{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 14px;margin:0 0 16px;border:1px solid #634044;border-radius:7px;background:#281c20;color:#f0b0a9;font-size:12px}
+    .error-banner[hidden]{display:none}.retry-btn{padding:6px 10px;border:1px solid #805357;background:transparent;border-radius:5px;color:#f0b0a9;cursor:pointer;font-size:11px}
+    .retry-btn:hover{background:#3a2428}
+    .loading-state{display:flex;align-items:center;gap:10px;padding:12px 15px;margin-bottom:16px;border:1px solid var(--line);border-radius:7px;background:#171a21;color:var(--muted);font-size:11px}
+    .loading-state[hidden]{display:none}.skeleton-line{width:95px;height:5px;border-radius:5px;background:linear-gradient(90deg,#252a33,#343b46,#252a33);background-size:200% 100%;animation:shimmer 1.4s ease-in-out infinite}
+    @keyframes shimmer{from{background-position:100% 0}to{background-position:-100% 0}}
+    .stats-grid{display:grid;grid-template-columns:1fr 1fr 1.25fr;gap:12px;margin-bottom:14px}
+    .stat-card{position:relative;min-height:116px;padding:17px 19px;overflow:hidden}
+    .stat-card::after{position:absolute;top:0;right:0;width:68px;height:100%;content:"";background:linear-gradient(90deg,transparent,rgba(255,255,255,.012));pointer-events:none}
+    .stat-label{color:var(--quiet);font:500 9px var(--mono);letter-spacing:.12em;text-transform:uppercase}
+    .stat-value{margin-top:13px;color:var(--ink);font:500 clamp(20px,2.4vw,27px) var(--mono);letter-spacing:-.06em}
+    .stat-value.green{color:var(--lime)}.stat-value.red{color:var(--coral)}.stat-value.blue{color:var(--cyan)}
+    .stat-foot{margin-top:5px;color:var(--quiet);font-size:10px}
+    .direction-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+    .direction-card{padding:18px 19px}
+    .direction-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:15px}
+    .direction-title{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:700;letter-spacing:.08em}
+    .direction-title.rise{color:var(--lime)}.direction-title.fall{color:var(--coral)}
+    .direction-glyph{display:grid;place-items:center;width:26px;height:26px;border-radius:6px;font:500 14px var(--mono)}
+    .rise .direction-glyph{background:var(--lime-soft)}.fall .direction-glyph{background:var(--coral-soft)}
+    .direction-percent{color:var(--muted);font:11px var(--mono)}
+    .progress-track{height:7px;margin-bottom:13px;border-radius:99px;background:#2a2e37;overflow:hidden}
+    .progress-fill{height:100%;width:0;border-radius:inherit;transition:width .24s ease}
+    .progress-fill.rise{background:var(--lime)}.progress-fill.fall{background:var(--coral)}
+    .direction-counts{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:11px}
+    .direction-counts span:first-child{color:var(--muted)}
+    .direction-counts span:last-child{color:var(--ink);font:11px var(--mono)}
+    .direction-note{min-height:16px;margin-top:11px;color:var(--muted);font-size:11px;line-height:1.45}
+    .direction-note.signal-rise{color:var(--lime)}.direction-note.signal-fall{color:var(--coral)}
+    .stream-section{padding:17px 19px}
+    .stream-head{display:flex;align-items:center;justify-content:space-between;gap:15px;margin-bottom:16px}
+    .stream-title{font-size:13px;font-weight:600}
+    .stream-subtitle{margin-top:4px;color:var(--quiet);font:10px var(--mono)}
+    .stream-window{color:var(--quiet);font:10px var(--mono)}
+    .stream-bars{display:flex;align-items:stretch;gap:4px;height:66px}
+    .stream-empty{display:grid;place-items:center;flex:1;border:1px dashed #343943;border-radius:4px;color:var(--quiet);font-size:11px}
+    .stream-bar{position:relative;flex:1;min-width:2px;border-radius:3px;transform-origin:bottom;animation:bar-in .2s ease both}
+    .stream-bar.rise{background:linear-gradient(180deg,#a9dd7c,#659947)}
+    .stream-bar.fall{background:linear-gradient(180deg,#ee8982,#a84e51)}
+    .stream-bar.flat{background:#626b78}
+    @keyframes bar-in{from{opacity:.3;transform:scaleY(.35)}to{opacity:1;transform:scaleY(1)}}
+    .stream-legend{display:flex;align-items:center;gap:18px;margin-top:13px;color:var(--muted);font-size:10px}
+    .legend-item{display:flex;align-items:center;gap:7px}.legend-swatch{width:8px;height:8px;border-radius:2px}
+    .legend-swatch.rise{background:var(--lime)}.legend-swatch.fall{background:var(--coral)}.legend-swatch.flat{background:#626b78}
+    .disclaimer{display:flex;align-items:flex-start;gap:11px;margin-top:14px;padding:12px 14px;border:1px solid #39414a;border-radius:7px;background:#171a20;color:var(--muted);font-size:11px;line-height:1.55}
+    .disclaimer-mark{flex:0 0 auto;color:#e8b978;font:500 11px var(--mono)}
+    .disclaimer strong{color:var(--ink);font-weight:600}
+    @media(max-width:850px){.controls{flex-wrap:wrap}.price-display{margin-left:auto}.stats-grid{grid-template-columns:repeat(3,1fr)}}
+    @media(max-width:650px){
+      .topbar{height:59px}.nav-inner{padding:0 13px}.brand-name{font-size:13px}.brand-mark{width:28px;height:28px}
+      .nav-links{gap:0}.nav-link{padding:0 9px;font-size:11px}
+      .workspace{padding:23px 13px 32px}.page-intro{align-items:flex-start;flex-direction:column;gap:14px;margin-bottom:17px}
+      .connection{align-self:flex-start}.controls{align-items:stretch;gap:15px;padding:14px}
+      .control-group{width:100%;justify-content:space-between}.control-group:first-child{align-items:end}
+      .control-group:first-child > div{flex:1}.control-group select{width:100%;min-width:0}
+      .window-controls{justify-content:space-between}.window-label{margin-right:auto}
+      .price-display{width:100%;min-width:0;margin-left:0;padding:12px 0 0;border-left:0;border-top:1px solid var(--line)}
+      .price-line{justify-content:space-between}.stats-grid{grid-template-columns:1fr 1fr;gap:9px}
+      .stat-card{min-height:101px;padding:14px}.stat-card:last-child{grid-column:1/-1}
+      .stat-value{margin-top:11px}.direction-grid{grid-template-columns:1fr;gap:9px}
+      .direction-card{padding:15px}.stream-section{padding:15px}.stream-bars{height:55px;gap:3px}
+    }
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+  </style>
 </head>
 <body>
-    <div class="app">
-        <div class="header">
-            <h1>Rise & Fall</h1>
-            <div class="live-badge">
-                <span class="live-dot"></span> Live
-            </div>
-        </div>
-
-        <div class="controls">
-            <div class="control-group">
-                <span class="control-label">Select Market:</span>
-                <select id="market-select">
-                    <option value="1HZ10V">1s V10</option>
-                    <option value="1HZ25V">1s V25</option>
-                    <option value="1HZ50V">1s V50</option>
-                    <option value="1HZ75V">1s V75</option>
-                    <option value="1HZ100V" selected>1s V100</option>
-                    <option value="R_10">V10</option>
-                    <option value="R_25">V25</option>
-                    <option value="R_50">V50</option>
-                    <option value="R_75">V75</option>
-                    <option value="R_100">V100</option>
-                </select>
-            </div>
-
-            <div class="control-group">
-                <span class="control-label">Analysis window:</span>
-                <button class="tf-btn" data-tf="10">10</button>
-                <button class="tf-btn active" data-tf="50">50</button>
-                <button class="tf-btn" data-tf="100">100</button>
-            </div>
-
-            <div class="price-display">
-                <span class="control-label">Price</span>
-                <span class="price-value" id="price">--</span>
-                <span class="digit-badge" id="digit-badge">--</span>
-            </div>
-        </div>
-
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-label">Net Change</div>
-                <div class="stat-value blue" id="net-change">--</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Change %</div>
-                <div class="stat-value blue" id="change-pct">--</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Direction</div>
-                <div class="stat-value" id="direction">--</div>
-            </div>
-        </div>
-
-        <div class="direction-grid">
-            <div class="direction-card">
-                <div class="direction-title rise">↗ RISE</div>
-                <div class="progress-bar">
-                    <div class="progress-fill rise" id="rise-bar" style="width: 50%"></div>
-                </div>
-                <div class="direction-counts">
-                    <span>Up ticks</span>
-                    <span id="rise-counts">0 / 0 (0%)</span>
-                </div>
-                <div class="direction-note" id="rise-note">Waiting for data...</div>
-            </div>
-
-            <div class="direction-card">
-                <div class="direction-title fall">↘ FALL</div>
-                <div class="progress-bar">
-                    <div class="progress-fill fall" id="fall-bar" style="width: 50%"></div>
-                </div>
-                <div class="direction-counts">
-                    <span>Down ticks</span>
-                    <span id="fall-counts">0 / 0 (0%)</span>
-                </div>
-                <div class="direction-note" id="fall-note">Waiting for data...</div>
-            </div>
-        </div>
-
-        <div class="stream-section">
-            <div class="stream-title">Tick Direction Stream · Last 40</div>
-            <div class="stream-bars" id="stream-bars"></div>
-            <div class="stream-legend">
-                <div class="legend-item"><div class="legend-dot" style="background:#00c853"></div> Rise tick</div>
-                <div class="legend-item"><div class="legend-dot" style="background:#ff5252"></div> Fall tick</div>
-            </div>
-        </div>
+  <nav class="topbar" aria-label="Main navigation">
+    <div class="nav-inner">
+      <a class="brand" href="/" aria-label="Deriv Analytics home">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none"><path d="M2 14.5h3.2l2.3-7 3.1 8 2.2-5h5.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="brand-name">deriv <span>analytics</span></span>
+      </a>
+      <div class="nav-links">
+        <a class="nav-link" href="/">Digits</a>
+        <a class="nav-link active" href="/risefall" aria-current="page">Rise &amp; Fall</a>
+      </div>
     </div>
-    <script src="/risefall.js"></script>
+  </nav>
+
+  <main class="workspace">
+    <div class="page-intro">
+      <div>
+        <div class="eyebrow">Momentum monitor / 02</div>
+        <h1>Rise &amp; Fall</h1>
+        <p class="intro-copy">Compare recent tick direction and quote movement across a short rolling window. A momentum readout is descriptive, never a prediction.</p>
+      </div>
+      <div class="connection" id="connection" role="status" aria-live="polite"><span class="live-dot"></span><span id="stream-status">Connecting</span></div>
+    </div>
+
+    <section class="panel controls" aria-label="Analysis controls">
+      <div class="control-group">
+        <div><label class="control-caption" for="market-select">Active market</label>
+          <select id="market-select">
+            <option value="1HZ10V">Volatility 10 (1s) Index</option>
+            <option value="1HZ25V">Volatility 25 (1s) Index</option>
+            <option value="1HZ50V">Volatility 50 (1s) Index</option>
+            <option value="1HZ75V">Volatility 75 (1s) Index</option>
+            <option value="1HZ100V">Volatility 100 (1s) Index</option>
+            <option value="R_10">Volatility 10 Index</option>
+            <option value="R_25">Volatility 25 Index</option>
+            <option value="R_50">Volatility 50 Index</option>
+            <option value="R_75">Volatility 75 Index</option>
+            <option value="R_100">Volatility 100 Index</option>
+          </select>
+        </div>
+      </div>
+      <div class="control-group window-controls" aria-label="Analysis window">
+        <span class="window-label">Window</span>
+        <button class="tf-btn" data-tf="10" type="button" aria-pressed="false">10</button>
+        <button class="tf-btn active" data-tf="50" type="button" aria-pressed="true">50</button>
+        <button class="tf-btn" data-tf="100" type="button" aria-pressed="false">100</button>
+        <span class="window-label">ticks</span>
+      </div>
+      <div class="price-display">
+        <div class="price-line">
+          <span class="price-label">Last quote</span>
+          <span class="price-value" id="price">—</span>
+          <span class="digit-badge" id="digit-badge" aria-label="Last digit">—</span>
+        </div>
+        <div class="quote-sub" id="market-symbol">Market — · exact quote</div>
+      </div>
+    </section>
+
+    <div class="error-banner" id="error-banner" role="alert" hidden>
+      <span id="error-message">Market data could not be loaded.</span>
+      <button class="retry-btn" id="retry-button" type="button">Retry</button>
+    </div>
+    <div class="loading-state" id="loading-state" role="status"><span class="skeleton-line" aria-hidden="true"></span><span id="loading-copy">Loading recent tick history</span></div>
+
+    <section class="stats-grid" aria-label="Momentum summary">
+      <article class="stat-card">
+        <div class="stat-label">Net change</div>
+        <div class="stat-value blue" id="net-change">—</div>
+        <div class="stat-foot">First to latest quote</div>
+      </article>
+      <article class="stat-card">
+        <div class="stat-label">Change %</div>
+        <div class="stat-value blue" id="change-pct">—</div>
+        <div class="stat-foot">Relative to window start</div>
+      </article>
+      <article class="stat-card">
+        <div class="stat-label">Direction</div>
+        <div class="stat-value blue" id="direction">—</div>
+        <div class="stat-foot" id="direction-foot">Awaiting enough ticks</div>
+      </article>
+    </section>
+
+    <section class="direction-grid" aria-label="Up and down tick analysis">
+      <article class="direction-card">
+        <div class="direction-head">
+          <div class="direction-title rise"><span class="direction-glyph" aria-hidden="true">↑</span>RISE</div>
+          <span class="direction-percent" id="rise-percent">—</span>
+        </div>
+        <div class="progress-track" aria-label="Rise tick share"><div class="progress-fill rise" id="rise-bar"></div></div>
+        <div class="direction-counts"><span>Up ticks</span><span id="rise-counts">—</span></div>
+        <div class="direction-note" id="rise-note">Waiting for market data.</div>
+      </article>
+      <article class="direction-card">
+        <div class="direction-head">
+          <div class="direction-title fall"><span class="direction-glyph" aria-hidden="true">↓</span>FALL</div>
+          <span class="direction-percent" id="fall-percent">—</span>
+        </div>
+        <div class="progress-track" aria-label="Fall tick share"><div class="progress-fill fall" id="fall-bar"></div></div>
+        <div class="direction-counts"><span>Down ticks</span><span id="fall-counts">—</span></div>
+        <div class="direction-note" id="fall-note">Waiting for market data.</div>
+      </article>
+    </section>
+
+    <section class="stream-section" aria-label="Tick direction stream">
+      <div class="stream-head">
+        <div><div class="stream-title">Tick direction stream</div><div class="stream-subtitle">Most recent movements · newest at right</div></div>
+        <span class="stream-window">LAST 40</span>
+      </div>
+      <div class="stream-bars" id="stream-bars" aria-live="polite"></div>
+      <div class="stream-legend">
+        <span class="legend-item"><span class="legend-swatch rise"></span>Rise tick</span>
+        <span class="legend-item"><span class="legend-swatch fall"></span>Fall tick</span>
+        <span class="legend-item"><span class="legend-swatch flat"></span>Unchanged</span>
+      </div>
+    </section>
+    <aside class="disclaimer">
+      <span class="disclaimer-mark" aria-hidden="true">NOTE</span>
+      <span><strong>Momentum visualizer, not a prediction tool.</strong> Deriv volatility indices are randomly generated. The <span id="momentum-threshold">65%</span> threshold is configurable in the client code for observation only; it does not guarantee outcomes.</span>
+    </aside>
+  </main>
+  <script src="/risefall.js"></script>
 </body>
 </html>

@@ -1,211 +1,286 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Deriv Digits Dashboard</title>
-    <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #0f1117;
-            color: #e8eaed;
-        }
-        .app {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 16px;
-        }
-        .card {
-            background: #1a1d24;
-            border: 1px solid #2a2e37;
-            border-radius: 12px;
-            margin-bottom: 16px;
-            overflow: hidden;
-        }
-        /* Header */
-        .header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 16px 20px;
-            background: #1a1d24;
-            border: 1px solid #2a2e37;
-            border-radius: 12px;
-            margin-bottom: 16px;
-        }
-        .market-info { display: flex; align-items: center; gap: 12px; }
-        .market-icon {
-            width: 40px; height: 40px;
-            border-radius: 8px;
-            background: linear-gradient(135deg, #1e3a5f, #0d1b2a);
-            display: flex; align-items: center; justify-content: center;
-            font-weight: 700; color: #4a9eff; font-size: 14px;
-            border: 1px solid #2a4a6f;
-        }
-        .market-name { font-size: 15px; font-weight: 600; color: #fff; }
-        .market-sub { font-size: 12px; color: #8892a0; margin-top: 2px; display: flex; align-items: center; gap: 6px; }
-        .market-selector {
-            background: #0f1117;
-            border: 1px solid #2a2e37;
-            border-radius: 6px;
-            color: #e8eaed;
-            padding: 8px 12px;
-            font-size: 13px;
-            cursor: pointer;
-            outline: none;
-            margin-left: 12px;
-        }
-        .market-selector:hover { border-color: #4a9eff; }
-        .price-block { display: flex; align-items: center; gap: 12px; }
-        .price-value { font-size: 22px; font-weight: 700; transition: color 0.2s; color: #fff; }
-        .price-value.up { color: #00c853; }
-        .price-value.down { color: #ff5252; }
-        .price-arrow { font-size: 16px; }
-        .price-arrow.up { color: #00c853; }
-        .price-arrow.down { color: #ff5252; }
-        .live-dot {
-            width: 8px; height: 8px; border-radius: 50%;
-            background: #00c853;
-            animation: pulse 1.5s infinite;
-        }
-        .live-dot.stale { background: #ff5252; animation: none; }
-        @keyframes pulse { 0%{opacity:1} 50%{opacity:0.3} 100%{opacity:1} }
-        .last-update { font-size: 11px; color: #6b7280; }
-        /* Chart */
-        #chart-container { width: 100%; height: 360px; }
-        /* Timeframe */
-        .timeframe-bar {
-            display: flex; gap: 8px;
-            padding: 12px 20px;
-            border-bottom: 1px solid #2a2e37;
-            flex-wrap: wrap;
-        }
-        .tf-btn {
-            padding: 6px 14px; border-radius: 6px;
-            border: 1px solid #2a2e37; background: #0f1117;
-            font-size: 12px; font-weight: 500; cursor: pointer;
-            color: #8892a0; transition: all 0.15s;
-        }
-        .tf-btn:hover { background: #232730; color: #e8eaed; }
-        .tf-btn.active { background: #4a9eff; color: #fff; border-color: #4a9eff; }
-        /* Digits */
-        .digits-section { padding: 20px; }
-        .digits-title, .history-title {
-            font-size: 12px; font-weight: 600; color: #8892a0;
-            margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;
-        }
-        .digits-row { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
-        .digit-circle {
-            flex: 1; min-width: 60px; aspect-ratio: 1;
-            border-radius: 50%; background: #232730;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            font-weight: 700; font-size: 20px; color: #e8eaed;
-            border: 3px solid #2a2e37; transition: all 0.25s ease;
-        }
-        .digit-circle.latest { border-color: #4a9eff; background: #1a2a3f; color: #4a9eff; transform: scale(1.05); }
-        .digit-circle.hot { border-color: #00c853; background: #122318; color: #00c853; }
-        .digit-circle.cold { border-color: #ff5252; background: #2a1215; color: #ff5252; }
-        .digit-percent { font-size: 10px; font-weight: 500; color: #6b7280; margin-top: 1px; }
-        /* History */
-        .history-section { padding: 16px 20px; border-top: 1px solid #2a2e37; }
-        .history-strip { display: flex; gap: 6px; flex-wrap: wrap; min-height: 32px; }
-        .history-pill {
-            width: 30px; height: 30px; border-radius: 50%;
-            background: #232730; display: flex; align-items: center; justify-content: center;
-            font-size: 13px; font-weight: 600; color: #e8eaed;
-            animation: slideIn 0.3s ease;
-        }
-        .history-pill.d0, .history-pill.d5 { background: #2a2e37; }
-        .history-pill.d1, .history-pill.d6 { background: #1e3a5f; }
-        .history-pill.d2, .history-pill.d7 { background: #122318; }
-        .history-pill.d3, .history-pill.d8 { background: #2a2318; }
-        .history-pill.d4, .history-pill.d9 { background: #2a1215; }
-        @keyframes slideIn { from{opacity:0;transform:scale(0.5)} to{opacity:1;transform:scale(1)} }
-        /* Stats */
-        .stats-bar {
-            display: flex; justify-content: space-around;
-            padding: 16px 20px; background: #14161c;
-            border-top: 1px solid #2a2e37; font-size: 13px;
-        }
-        .stat-item { text-align: center; }
-        .stat-label { color: #6b7280; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
-        .stat-value { font-weight: 700; font-size: 16px; color: #fff; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0f1117">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231a1d24'/%3E%3Cpath d='M8 40h11l7-21 10 27 7-17h13' fill='none' stroke='%2354c8d5' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <title>Digits — Deriv Analytics</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1117;
+      --panel: #1a1d24;
+      --panel-raised: #20242c;
+      --panel-deep: #14161c;
+      --line: #2a2e37;
+      --line-bright: #3a414d;
+      --ink: #e8eaed;
+      --muted: #8892a0;
+      --quiet: #626c7b;
+      --cyan: #54c8d5;
+      --cyan-soft: #16343a;
+      --lime: #9bd56b;
+      --lime-soft: #263622;
+      --coral: #ed7772;
+      --coral-soft: #3a2428;
+      --mono: "DM Mono", "SFMono-Regular", Consolas, monospace;
+      --sans: "DM Sans", "Segoe UI", sans-serif;
+      --radius: 10px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100dvh; color: var(--ink); background: var(--bg);
+      font-family: var(--sans); font-size: 14px; letter-spacing: .005em;
+      background-image: radial-gradient(ellipse at 50% -28%, rgba(84,200,213,.075), transparent 54%);
+    }
+    button, select { font: inherit; }
+    button:focus-visible, select:focus-visible, a:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+    .topbar {
+      position: sticky; top: 0; z-index: 10; height: 66px;
+      background: rgba(15,17,23,.94); border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(14px);
+    }
+    .nav-inner { max-width: 1440px; height: 100%; margin: auto; padding: 0 32px; display: flex; align-items: center; justify-content: space-between; }
+    .brand { display: flex; gap: 11px; align-items: center; color: var(--ink); text-decoration: none; font-weight: 700; letter-spacing: -.035em; }
+    .brand-mark { display: grid; place-items: center; width: 31px; height: 31px; border: 1px solid #3b6268; background: #17292d; border-radius: 8px; color: var(--cyan); }
+    .brand-mark svg { width: 19px; height: 19px; }
+    .brand-name { font-size: 15px; }
+    .brand-name span { color: var(--muted); font-weight: 500; }
+    .nav-links { align-self: stretch; display: flex; align-items: center; gap: 7px; }
+    .nav-link { height: 100%; display: inline-flex; align-items: center; padding: 0 15px; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; font-size: 13px; transition: color .16s ease, border-color .16s ease; }
+    .nav-link:hover { color: var(--ink); }
+    .nav-link.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+    .workspace { max-width: 1440px; margin: 0 auto; padding: 31px 32px 48px; }
+    .page-intro { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 22px; }
+    .eyebrow { color: var(--cyan); font: 500 10px var(--mono); letter-spacing: .16em; text-transform: uppercase; margin-bottom: 9px; }
+    h1 { margin: 0; font-size: clamp(25px, 3vw, 34px); line-height: 1.1; letter-spacing: -.045em; font-weight: 600; }
+    .intro-copy { max-width: 465px; margin: 8px 0 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+    .connection { display: inline-flex; align-items: center; gap: 9px; white-space: nowrap; border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px; color: var(--muted); font: 500 11px var(--mono); background: #15181e; }
+    .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--lime); box-shadow: 0 0 0 3px rgba(155,213,107,.11); }
+    .connection.live { color: var(--lime); }
+    .connection.live .live-dot { animation: pulse 1.5s ease-in-out infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+    .connection.stale { color: #e8b978; }
+    .connection.stale .live-dot { background: #e8b978; box-shadow: 0 0 0 3px rgba(232,185,120,.1); }
+    .connection.offline { color: var(--coral); }
+    .connection.offline .live-dot { background: var(--coral); box-shadow: 0 0 0 3px rgba(237,119,114,.1); }
+    .market-panel, .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+    .market-panel { padding: 18px 20px; display: flex; justify-content: space-between; align-items: center; gap: 24px; margin-bottom: 16px; }
+    .market-identity { min-width: 0; display: flex; align-items: center; gap: 14px; }
+    .market-icon { display: grid; place-items: center; flex: 0 0 auto; width: 44px; height: 44px; border: 1px solid #3e656b; border-radius: 9px; background: linear-gradient(145deg,#1b3438,#18252b); color: var(--cyan); font: 500 11px var(--mono); }
+    .market-label { color: var(--quiet); font: 500 10px var(--mono); letter-spacing: .11em; text-transform: uppercase; margin-bottom: 4px; }
+    .market-name { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .market-symbol { margin-top: 4px; color: var(--muted); font: 11px var(--mono); }
+    .market-right { display: flex; justify-content: flex-end; align-items: center; gap: 20px; }
+    .select-wrap { display: flex; flex-direction: column; gap: 5px; }
+    .micro-label { color: var(--quiet); font: 500 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+    select {
+      min-width: 190px; border: 1px solid var(--line-bright); border-radius: 6px; background: #13161c; color: var(--ink);
+      padding: 9px 30px 9px 11px; cursor: pointer; font-size: 12px; transition: border-color .15s ease, background .15s ease;
+    }
+    select:hover { border-color: #53777c; }
+    select:disabled { opacity: .58; cursor: progress; }
+    .quote-box { min-width: 190px; border-left: 1px solid var(--line); padding-left: 20px; }
+    .quote-label { display: flex; align-items: center; gap: 7px; color: var(--quiet); font: 500 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+    .quote-value { margin-top: 6px; color: var(--ink); font: 500 20px var(--mono); letter-spacing: -.04em; transition: color .2s ease; }
+    .quote-value.up { color: var(--lime); } .quote-value.down { color: var(--coral); }
+    .quote-arrow { display: inline-block; width: 14px; font-size: 12px; }
+    .quote-arrow.up { color: var(--lime); } .quote-arrow.down { color: var(--coral); }
+    .updated-at { margin-top: 4px; color: var(--quiet); font: 10px var(--mono); }
+    .error-banner { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px 14px; margin: 0 0 16px; border: 1px solid #634044; border-radius: 7px; background: #281c20; color: #f0b0a9; font-size: 12px; }
+    .error-banner[hidden] { display: none; }
+    .retry-btn { padding: 6px 10px; border: 1px solid #805357; background: transparent; border-radius: 5px; color: #f0b0a9; cursor: pointer; font-size: 11px; }
+    .retry-btn:hover { background: #3a2428; }
+    .chart-card { overflow: hidden; margin-bottom: 16px; }
+    .card-head { padding: 16px 19px 13px; display: flex; justify-content: space-between; align-items: center; gap: 18px; border-bottom: 1px solid var(--line); }
+    .section-title { color: var(--ink); font-size: 13px; font-weight: 600; }
+    .section-meta { margin-top: 4px; color: var(--quiet); font: 10px var(--mono); }
+    .chart-legend { display: flex; align-items: center; gap: 7px; color: var(--muted); font: 10px var(--mono); }
+    .legend-line { width: 18px; height: 2px; background: var(--cyan); }
+    .chart-wrap { position: relative; min-height: 290px; padding: 8px 13px 8px 4px; }
+    #chart-container { width: 100%; height: 292px; }
+    .chart-empty { position: absolute; inset: 8px 13px 8px 4px; display: grid; place-content: center; text-align: center; gap: 8px; background: rgba(26,29,36,.94); color: var(--muted); font-size: 12px; }
+    .chart-empty[hidden] { display: none; }
+    .skeleton-line { width: 150px; height: 5px; margin: 0 auto; border-radius: 5px; background: linear-gradient(90deg,#252a33,#343b46,#252a33); background-size: 200% 100%; animation: shimmer 1.4s ease-in-out infinite; }
+    @keyframes shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+    .analysis-card { overflow: hidden; margin-bottom: 16px; }
+    .timeframe-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; padding: 12px 18px; border-bottom: 1px solid var(--line); }
+    .timeframe-label { margin-right: 7px; color: var(--quiet); font: 10px var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+    .tf-btn { min-height: 30px; padding: 0 11px; color: var(--muted); border: 1px solid transparent; border-radius: 5px; background: transparent; cursor: pointer; font: 11px var(--mono); transition: color .15s ease, background .15s ease, border-color .15s ease; }
+    .tf-btn:hover { color: var(--ink); background: #252a32; }
+    .tf-btn.active { color: var(--cyan); border-color: #31555a; background: var(--cyan-soft); }
+    .digits-section { padding: 18px 19px 20px; }
+    .section-kicker { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 17px; }
+    .section-kicker h2 { margin: 0; color: var(--ink); font-size: 13px; font-weight: 600; }
+    .section-kicker span { color: var(--quiet); font: 10px var(--mono); }
+    .digits-row { display: grid; grid-template-columns: repeat(10,minmax(0,1fr)); gap: clamp(7px,1.3vw,17px); }
+    .digit-cell { display: flex; min-width: 0; flex-direction: column; align-items: center; gap: 8px; }
+    .digit-circle { width: min(100%,72px); aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px solid #363c47; border-radius: 50%; background: #22262f; color: var(--ink); transition: transform .17s ease, background .17s ease, border-color .17s ease; }
+    .digit-number { font: 500 clamp(16px,2vw,21px) var(--mono); line-height: 1; }
+    .digit-percent { margin-top: 5px; color: var(--muted); font: 9px var(--mono); }
+    .digit-cell .digit-tag { min-height: 10px; color: var(--quiet); font: 8px var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+    .digit-circle.latest { border: 2px solid var(--cyan); background: #193338; color: #8ce0e8; transform: translateY(-2px); }
+    .digit-circle.hot { border: 2px solid var(--lime); background: #253322; color: #b6e48d; }
+    .digit-circle.cold { border: 2px solid var(--coral); background: #382326; color: #f29a91; }
+    .history-section { padding: 15px 19px 18px; border-top: 1px solid var(--line); }
+    .history-strip { display: flex; min-height: 29px; flex-wrap: wrap; gap: 6px; }
+    .history-pill { display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--line); border-radius: 5px; color: var(--ink); background: #252932; font: 11px var(--mono); animation: settle .2s ease both; }
+    .history-pill.d0, .history-pill.d5 { color: #d8c98d; background: #302e25; }
+    .history-pill.d1, .history-pill.d6 { color: #86d3dc; background: #203237; }
+    .history-pill.d2, .history-pill.d7 { color: #b4dc90; background: #263322; }
+    .history-pill.d3, .history-pill.d8 { color: #e9ad7d; background: #382c25; }
+    .history-pill.d4, .history-pill.d9 { color: #ef9992; background: #392629; }
+    @keyframes settle { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
+    .history-empty { color: var(--quiet); font-size: 12px; }
+    .stats-row { display: grid; grid-template-columns: repeat(4,1fr); background: var(--panel-deep); border-top: 1px solid var(--line); }
+    .stat { padding: 15px 19px; border-right: 1px solid var(--line); }
+    .stat:last-child { border-right: 0; }
+    .stat-label { color: var(--quiet); font: 9px var(--mono); letter-spacing: .11em; text-transform: uppercase; }
+    .stat-value { margin-top: 6px; color: var(--ink); font: 500 17px var(--mono); }
+    .stat-note { margin-top: 3px; color: var(--quiet); font-size: 10px; }
+    .footnote { display: flex; justify-content: space-between; align-items: center; gap: 16px; color: var(--quiet); font-size: 10px; }
+    .mono { font-family: var(--mono); }
+    @media (max-width: 760px) {
+      .nav-inner { padding: 0 18px; } .workspace { padding: 24px 18px 36px; }
+      .market-panel { align-items: flex-start; flex-direction: column; gap: 17px; }
+      .market-right { width: 100%; justify-content: space-between; }
+      .quote-box { min-width: 0; }
+      .digits-row { grid-template-columns: repeat(5,minmax(0,1fr)); row-gap: 16px; }
+      .digit-circle { width: 58px; }
+    }
+    @media (max-width: 520px) {
+      .topbar { height: 59px; } .nav-inner { padding: 0 13px; } .brand-name { font-size: 13px; }
+      .brand-mark { width: 28px; height: 28px; } .nav-links { gap: 0; }
+      .nav-link { padding: 0 9px; font-size: 11px; }
+      .workspace { padding: 21px 12px 30px; }
+      .page-intro { align-items: flex-start; flex-direction: column; gap: 14px; margin-bottom: 17px; }
+      .connection { align-self: flex-start; }
+      .market-panel { padding: 15px; }
+      .market-right { align-items: flex-end; gap: 10px; }
+      .select-wrap { min-width: 0; flex: 1; } select { width: 100%; min-width: 0; }
+      .quote-box { padding-left: 11px; } .quote-value { font-size: 16px; }
+      .chart-wrap { min-height: 245px; padding-left: 0; } #chart-container { height: 245px; }
+      .card-head { padding: 14px; }
+      .timeframe-bar { padding: 10px 12px; gap: 3px; } .timeframe-label { width: 100%; margin-bottom: 3px; }
+      .tf-btn { flex: 1; padding: 0 7px; }
+      .digits-section { padding: 16px 13px; }
+      .history-section { padding: 14px 13px; }
+      .history-strip { gap: 5px; }
+      .stats-row { grid-template-columns: repeat(2,1fr); }
+      .stat { padding: 13px; border-bottom: 1px solid var(--line); }
+      .stat:nth-child(2) { border-right: 0; } .stat:nth-child(n+3) { border-bottom: 0; }
+      .stat-value { font-size: 15px; }
+      .footnote { align-items: flex-start; flex-direction: column; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
+  </style>
 </head>
 <body>
-    <div class="app">
-        <div class="header">
-            <div class="market-info">
-                <div class="market-icon" id="market-icon">100</div>
-                <div>
-                    <div class="market-name" id="market-name">Volatility 100 (1s) Index</div>
-                    <div class="market-sub">
-                        <span class="live-dot" id="live-dot"></span>
-                        <span id="stream-status">Live</span>
-                        <span class="last-update" id="last-update">--</span>
-                    </div>
-                </div>
-                <select class="market-selector" id="market-select">
-                    <option value="1HZ10V">Volatility 100 (1s)</option>
-                    <option value="1HZ25V">Volatility 25 (1s)</option>
-                    <option value="1HZ50V">Volatility 50 (1s)</option>
-                    <option value="1HZ75V">Volatility 75 (1s)</option>
-                    <option value="1HZ100V">Volatility 100 (1s)</option>
-                    <option value="R_10">Volatility 10</option>
-                    <option value="R_25">Volatility 25</option>
-                    <option value="R_50">Volatility 50</option>
-                    <option value="R_75">Volatility 75</option>
-                    <option value="R_100">Volatility 100</option>
-                </select>
-            </div>
-            <div class="price-block">
-                <span class="price-arrow" id="price-arrow">—</span>
-                <span class="price-value" id="price">--</span>
-            </div>
-        </div>
-
-        <div class="card">
-            <div id="chart-container"></div>
-        </div>
-
-        <div class="card">
-            <div class="timeframe-bar">
-                <button class="tf-btn" data-tf="50">Last 50 ticks</button>
-                <button class="tf-btn" data-tf="100">Last 100 ticks</button>
-                <button class="tf-btn active" data-tf="200">Last 200 ticks</button>
-                <button class="tf-btn" data-tf="500">Last 500 ticks</button>
-                <button class="tf-btn" data-tf="1000">Last 1000 ticks</button>
-            </div>
-            <div class="digits-section">
-                <div class="digits-title">Digit Distribution</div>
-                <div class="digits-row" id="digits"></div>
-            </div>
-            <div class="history-section">
-                <div class="history-title">Recent Digits</div>
-                <div class="history-strip" id="history"></div>
-            </div>
-            <div class="stats-bar">
-                <div class="stat-item">
-                    <div class="stat-label">Total Ticks</div>
-                    <div class="stat-value" id="total-ticks">0</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-label">Latest Digit</div>
-                    <div class="stat-value" id="latest-digit">--</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-label">Most Frequent</div>
-                    <div class="stat-value" id="hot-digit">--</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-label">Least Frequent</div>
-                    <div class="stat-value" id="cold-digit">--</div>
-                </div>
-            </div>
-        </div>
+  <nav class="topbar" aria-label="Main navigation">
+    <div class="nav-inner">
+      <a class="brand" href="/" aria-label="Deriv Analytics home">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none"><path d="M2 14.5h3.2l2.3-7 3.1 8 2.2-5h5.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="brand-name">deriv <span>analytics</span></span>
+      </a>
+      <div class="nav-links">
+        <a class="nav-link active" href="/" aria-current="page">Digits</a>
+        <a class="nav-link" href="/risefall">Rise &amp; Fall</a>
+      </div>
     </div>
-    <script src="/app.js"></script>
+  </nav>
+
+  <main class="workspace">
+    <div class="page-intro">
+      <div>
+        <div class="eyebrow">Market instrument / 01</div>
+        <h1>Digit distribution</h1>
+        <p class="intro-copy">A live read on the last digit of every quote. Distribution describes the selected sample; it does not forecast the next tick.</p>
+      </div>
+      <div class="connection" id="connection" role="status" aria-live="polite"><span class="live-dot"></span><span id="stream-status">Connecting</span></div>
+    </div>
+
+    <section class="market-panel" aria-label="Selected market">
+      <div class="market-identity">
+        <div class="market-icon" id="market-icon" aria-hidden="true">10V</div>
+        <div style="min-width:0">
+          <div class="market-label">Active market</div>
+          <div class="market-name" id="market-name">Loading market…</div>
+          <div class="market-symbol" id="market-symbol">—</div>
+        </div>
+      </div>
+      <div class="market-right">
+        <label class="select-wrap">
+          <span class="micro-label">Instrument</span>
+          <select id="market-select" aria-label="Select market">
+            <option value="1HZ10V">Volatility 10 (1s) Index</option>
+            <option value="1HZ25V">Volatility 25 (1s) Index</option>
+            <option value="1HZ50V">Volatility 50 (1s) Index</option>
+            <option value="1HZ75V">Volatility 75 (1s) Index</option>
+            <option value="1HZ100V">Volatility 100 (1s) Index</option>
+            <option value="R_10">Volatility 10 Index</option>
+            <option value="R_25">Volatility 25 Index</option>
+            <option value="R_50">Volatility 50 Index</option>
+            <option value="R_75">Volatility 75 Index</option>
+            <option value="R_100">Volatility 100 Index</option>
+          </select>
+        </label>
+        <div class="quote-box">
+          <div class="quote-label"><span class="quote-arrow" id="price-arrow">—</span>Latest quote</div>
+          <div class="quote-value" id="price">—</div>
+          <div class="updated-at" id="last-update">Waiting for first tick</div>
+        </div>
+      </div>
+    </section>
+
+    <div class="error-banner" id="error-banner" role="alert" hidden>
+      <span id="error-message">Market data could not be loaded.</span>
+      <button class="retry-btn" id="retry-button" type="button">Retry</button>
+    </div>
+
+    <section class="card chart-card" aria-label="Quote history chart">
+      <div class="card-head">
+        <div><div class="section-title">Quote history</div><div class="section-meta" id="chart-meta">Last 200 ticks · full-precision quotes</div></div>
+        <div class="chart-legend"><span class="legend-line"></span>Quote</div>
+      </div>
+      <div class="chart-wrap">
+        <div id="chart-container" aria-label="Line chart of market quotes"></div>
+        <div class="chart-empty" id="chart-empty"><span class="skeleton-line" aria-hidden="true"></span><span id="chart-empty-copy">Loading market history</span></div>
+      </div>
+    </section>
+
+    <section class="card analysis-card" aria-label="Digit analytics">
+      <div class="timeframe-bar" aria-label="Tick window">
+        <span class="timeframe-label">Sample window</span>
+        <button type="button" class="tf-btn" data-tf="50">50 ticks</button>
+        <button type="button" class="tf-btn" data-tf="100">100 ticks</button>
+        <button type="button" class="tf-btn active" data-tf="200" aria-pressed="true">200 ticks</button>
+        <button type="button" class="tf-btn" data-tf="500">500 ticks</button>
+        <button type="button" class="tf-btn" data-tf="1000">1000 ticks</button>
+      </div>
+      <div class="digits-section">
+        <div class="section-kicker"><h2>Digit distribution</h2><span id="distribution-note">0 ticks in sample</span></div>
+        <div class="digits-row" id="digits" aria-live="polite"></div>
+      </div>
+      <div class="history-section">
+        <div class="section-kicker"><h2>Recent digits</h2><span>Latest first · repeated neighbours collapsed</span></div>
+        <div class="history-strip" id="history" aria-label="Recent distinct consecutive digits"></div>
+      </div>
+      <div class="stats-row">
+        <div class="stat"><div class="stat-label">Total ticks</div><div class="stat-value" id="total-ticks">—</div><div class="stat-note">In selected window</div></div>
+        <div class="stat"><div class="stat-label">Latest digit</div><div class="stat-value" id="latest-digit">—</div><div class="stat-note">Raw quote ending</div></div>
+        <div class="stat"><div class="stat-label">Most frequent</div><div class="stat-value" id="hot-digit">—</div><div class="stat-note">Highest count</div></div>
+        <div class="stat"><div class="stat-label">Least frequent</div><div class="stat-value" id="cold-digit">—</div><div class="stat-note">Lowest count</div></div>
+      </div>
+    </section>
+    <div class="footnote"><span>Observed values only · no directional prediction</span><span class="mono" id="data-source">Source: live tick stream</span></div>
+  </main>
+
+  <!-- Deriv references: https://developers.deriv.com/docs/ · https://developers.deriv.com/llms.txt · https://developers.deriv.com/llms/getting-started.md · https://developers.deriv.com/llms/ticks-history.md · https://developers.deriv.com/llms/ticks.md · https://developers.deriv.com/llms/ws-public.md · https://developers.deriv.com/llms/errors.md · https://developers.deriv.com/playground · api-support@deriv.com -->
+  <script src="/app.js"></script>
 </body>
 </html>

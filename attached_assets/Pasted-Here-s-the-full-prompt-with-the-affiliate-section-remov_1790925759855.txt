@@ -1,0 +1,259 @@
+Here's the full prompt with the affiliate section removed. Everything else stays — including the digit-0 fix, API details, and source materials.
+
+---
+
+## 🚀 Replit Agent Prompt — Deriv Analytics Dashboard
+
+### 📋 Project Overview
+
+Build a **Deriv Analytics** web application on Replit using **Node.js**. The app will have two pages:
+
+1. **Digits Dashboard** — shows live digit distribution (0–9) from Deriv's volatility indices, with a live chart, digit circles with percentages, a history strip, and a market selector.
+2. **Rise & Fall Analysis** — shows tick direction (up/down) analysis with net change, direction indicator, up/down tick counts, and a visual tick direction stream.
+
+Both pages must connect to **Deriv's public WebSocket API** for real-time market data. No authentication is required for public market data.
+
+### 🛠️ Tech Stack
+
+- **Runtime:** Node.js
+- **Web framework:** Native `http` module
+- **WebSocket client:** `ws` package
+- **Charting library (frontend):** Lightweight Charts (loaded via CDN)
+- **Dependencies:** `npm install ws`
+
+### 📁 File Structure
+
+```
+/
+├── index.js              (backend server + WebSocket client)
+├── package.json
+└── site/
+    ├── index.html        (Digits dashboard page)
+    ├── app.js            (Digits dashboard frontend logic)
+    ├── risefall.html     (Rise & Fall page)
+    └── risefall.js       (Rise & Fall frontend logic)
+```
+
+### 🔌 Deriv API Details
+
+**Public WebSocket endpoint (no auth required):**
+```
+wss://api.derivws.com/trading/v1/options/ws/public
+```
+
+**Subscribe to live ticks:**
+```javascript
+ws.send(JSON.stringify({ ticks: "1HZ10V", subscribe: 1 }));
+```
+
+**Fetch historical ticks:**
+```javascript
+ws.send(JSON.stringify({
+    ticks_history: "1HZ10V",
+    end: "latest",
+    start: 0,
+    style: "ticks",
+    count: 1000
+}));
+```
+
+**Ticks history response structure:**
+```javascript
+{
+    msg_type: "history",
+    history: {
+        prices: [...],   // array of price quotes
+        times: [...]     // array of epoch timestamps
+    }
+}
+```
+
+**Live tick response structure:**
+```javascript
+{
+    tick: {
+        quote: 1234.56,
+        epoch: 1704067200,
+        symbol: "R_50"
+    }
+}
+```
+
+**Keep-alive (send ping every 30 seconds):**
+```javascript
+setInterval(() => {
+    if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ ping: 1 }));
+    }
+}, 30000);
+```
+
+**On market switch (unsubscribe from old, subscribe to new):**
+```javascript
+ws.send(JSON.stringify({ forget_all: "ticks" }));
+ws.send(JSON.stringify({ ticks: newSymbol, subscribe: 1 }));
+```
+
+### 🎯 Critical: Digit Extraction (THE ZERO FIX)
+
+**Known Deriv bug:** Deriv's own "last digit" variable does **not return the digit `0`** — when the real last digit is `0`, it returns a different number instead. This is a confirmed, unresolved platform bug.
+
+**The fix:** Extract the last digit directly from the **raw quote string**, not from any Deriv-provided digit field.
+
+```javascript
+// ✅ CORRECT — always works, including for 0
+const quoteStr = quote.toString();
+const lastDigit = parseInt(quoteStr.slice(-1));
+
+// ❌ WRONG — Deriv's own digit field ignores 0
+// const lastDigit = msg.tick.last_digit;  // NEVER use this
+```
+
+**Backend requirement:** Send the **raw quote as a string** in the SSE payload, so the frontend can extract the digit from the last character. Do not round the quote before sending.
+
+### 📡 Backend Requirements (`index.js`)
+
+**1. HTTP server that serves:**
+- `/` → `site/index.html`
+- `/risefall` → `site/risefall.html`
+- `/app.js` → `site/app.js`
+- `/risefall.js` → `site/risefall.js`
+
+**2. SSE endpoints:**
+
+- `/stream` — pushes `{ quote, digit, timestamp, trend, symbol }` on every new tick
+- `/stream/direction` — pushes `{ quote, trend, timestamp, symbol }` on every new tick
+
+**Important:** Push to SSE clients **only when a new tick arrives** — do NOT use `setInterval` to push the same tick repeatedly. Use an event-driven approach:
+
+```javascript
+const sseClients = new Set();
+
+// In ws.on('message'):
+const payload = `data: ${JSON.stringify(latestTick)}\n\n`;
+for (const client of sseClients) {
+    client.write(payload);
+}
+```
+
+**3. REST endpoints:**
+- `/history` → returns `{ history: [...], symbol }` — last 1000 ticks with digit and trend
+- `/history/direction?count=N` → returns `{ ticks: [...], symbol }` — last N ticks with computed trend (up/down/flat)
+- `/switch?symbol=XXX` → switches market, returns `{ symbol, historyCount }`
+- `/markets` → returns `{ markets: {...}, current }`
+
+**4. Trend calculation:**
+```javascript
+const trend = previousQuote === null ? 'flat'
+    : quote > previousQuote ? 'up'
+    : quote < previousQuote ? 'down'
+    : 'flat';
+previousQuote = quote;
+```
+
+### 🎨 Frontend Requirements
+
+#### Page 1: Digits Dashboard (`site/index.html` + `site/app.js`)
+
+**Layout:**
+- Dark theme (`#0f1117` background, `#1a1d24` cards, `#2a2e37` borders)
+- Sticky top navigation bar
+- Header with market icon, market name, live indicator (green pulsing dot), price with up/down arrow
+- Chart container (Lightweight Charts, dark theme)
+- Timeframe buttons: **50 / 100 / 200 / 500 / 1000 ticks**
+- Digit distribution row: 10 circles (0–9) with percentages inside
+  - **Blue ring** on the latest digit
+  - **Green ring** on the most frequent digit (hot)
+  - **Red ring** on the least frequent digit (cold)
+- Recent Digits strip: last 30 digits as colored pills (newest first)
+- Stats bar: Total Ticks, Latest Digit, Most Frequent, Least Frequent
+
+**Market selector:** dropdown with `1HZ10V`, `1HZ25V`, `1HZ50V`, `1HZ75V`, `1HZ100V`, `R_10`, `R_25`, `R_50`, `R_75`, `R_100`
+
+**Critical behavior:**
+- On market switch, fetch `/history` **after** the backend confirms the switch, then populate the chart and stats instantly
+- Use `lineSeries.setData()` on switch (not `update()`)
+- Only add a tick to history when the digit is **different from the last one** in the display (prevents visual duplicates)
+
+#### Page 2: Rise & Fall (`site/risefall.html` + `site/risefall.js`)
+
+**Layout:**
+- Same dark theme and nav bar
+- Header with "Rise & Fall" title and Live badge
+- Controls row: Market selector | Analysis window (10 / 50 / 100) | Price + digit badge
+- Stats grid: **Net Change** | **Change %** | **Direction** (RISING/FALLING/FLAT)
+- Direction grid: **RISE** card and **FALL** card
+  - Each with a progress bar showing percentage
+  - Up ticks: `X / N (Y%)`
+  - Down ticks: `X / N (Y%)`
+  - Momentum messages: "Bullish momentum detected" if ≥65% up ticks, else "Insufficient bullish momentum. Wait for 65%+ up ticks."
+- Tick Direction Stream: last 40 ticks as green (rise) / red (fall) bars
+- Legend: Rise tick / Fall tick
+
+**Critical behavior:**
+- Price display should show the **full-precision quote** (e.g., `4941.592`), not rounded to 2 decimals — this matches Deriv's digit logic and prevents confusion
+- Digit badge extracts last digit from the raw quote string
+- On market switch, reset all data and fetch fresh history
+
+### 📚 Source Materials & Documentation
+
+Include these links in the project's README or a comments section:
+
+| Resource | URL |
+|----------|-----|
+| Deriv API documentation | `https://developers.deriv.com/docs/` |
+| Deriv API LLMs reference | `https://developers.deriv.com/llms.txt` |
+| Getting Started guide | `https://developers.deriv.com/llms/getting-started.md` |
+| Ticks History endpoint | `https://developers.deriv.com/llms/ticks-history.md` |
+| Ticks Stream endpoint | `https://developers.deriv.com/llms/ticks.md` |
+| WebSocket public endpoint | `https://developers.deriv.com/llms/ws-public.md` |
+| Error handling | `https://developers.deriv.com/llms/errors.md` |
+| Deriv API Playground | `https://developers.deriv.com/playground` |
+| Deriv API support email | `api-support@deriv.com` |
+
+### ⚠️ Edge Cases & Important Notes
+
+1. **Digit 0 bug:** Always extract the last digit from the raw quote string. Never rely on any Deriv-provided digit field.
+
+2. **1000-tick window timing:** `1HZ10V` fires 1 tick per second. A 1000-tick window represents ~16 minutes 40 seconds of data. When you first switch markets, the history request returns 1000 ticks instantly, but the live stream fills the window gradually.
+
+3. **SSE duplicate prevention:** Do NOT use `setInterval` to push ticks. Push only when a new tick arrives from the WebSocket. This prevents duplicate digits in the history strip.
+
+4. **WebSocket keep-alive:** Send `{ ping: 1 }` every 30 seconds to prevent the connection from timing out after 2 minutes of inactivity.
+
+5. **Reconnection:** If the WebSocket closes, reconnect with exponential backoff (1s, 2s, 4s, 8s, max 30s) and re-subscribe to the current market.
+
+6. **Market switch flow:**
+   - Send `{ forget_all: "ticks" }`
+   - Fetch `ticks_history` for the new symbol
+   - Wait for the history response
+   - Send `{ ticks: newSymbol, subscribe: 1 }`
+   - Return the new symbol to the frontend
+
+7. **Accuracy disclaimer:** Deriv's volatility indices are randomly generated. The Rise & Fall page is a **momentum visualizer**, not a prediction tool. Be transparent about this in the UI. The 65% threshold is a configurable signal — it does not guarantee outcomes.
+
+### ✅ Deliverables
+
+- [ ] `index.js` — complete backend with WebSocket client, SSE endpoints, REST endpoints, keep-alive, and reconnection
+- [ ] `site/index.html` — Digits dashboard with dark theme
+- [ ] `site/app.js` — Digits dashboard logic with digit-0 fix
+- [ ] `site/risefall.html` — Rise & Fall page with dark theme
+- [ ] `site/risefall.js` — Rise & Fall logic with full-precision price display
+- [ ] `package.json` with `"start": "node index.js"`
+- [ ] Navigation bar on both pages linking to each other
+
+### 🧪 Testing Checklist
+
+- [ ] Digits dashboard loads and shows live ticks
+- [ ] Digit 0 appears correctly in the distribution (no skipping)
+- [ ] Market switch populates chart and stats instantly
+- [ ] Rise & Fall page loads and shows live direction analysis
+- [ ] Analysis window buttons (10/50/100) switch correctly
+- [ ] Price displays full precision (e.g., `4941.592`)
+- [ ] Navigation bar works between both pages
+- [ ] No duplicate digits in the recent digits strip
+- [ ] WebSocket stays alive for 10+ minutes without disconnecting
+
+---
+
+Paste this into Replit Agent. When you're ready to add the affiliate integration later, just say the word and I'll give you a small add-on prompt for it.
