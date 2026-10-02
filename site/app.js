@@ -98,11 +98,17 @@
     const latest = total ? ticks[total - 1].digit : null;
     let hot = null;
     let cold = null;
+    let hotLabel = "";
+    let coldLabel = "";
     if (total) {
       hot = 0; cold = 0;
       for (let digit = 1; digit < 10; digit += 1) {
         if (counts[digit] > counts[hot]) hot = digit;
         if (counts[digit] < counts[cold]) cold = digit;
+      }
+      if (total > 5) {
+        hotLabel = "Most";
+        coldLabel = "Least";
       }
     }
 
@@ -124,8 +130,18 @@
       percent.textContent = total ? `${((counts[digit] / total) * 100).toFixed(1)}%` : "—";
       circle.append(number, percent);
       const tag = document.createElement("span");
-      tag.className = "digit-tag";
-      tag.textContent = digit === latest && total ? "latest" : digit === hot && total > 5 ? "most" : digit === cold && total > 5 ? "least" : "";
+      if (digit === latest && total) {
+        tag.className = "digit-label latest";
+        tag.textContent = "Latest";
+      } else if (digit === hot && total > 5) {
+        tag.className = "digit-label hot";
+        tag.textContent = hotLabel;
+      } else if (digit === cold && total > 5) {
+        tag.className = "digit-label cold";
+        tag.textContent = coldLabel;
+      } else {
+        tag.className = "digit-label";
+      }
       cell.append(circle, tag);
       digits.appendChild(cell);
     }

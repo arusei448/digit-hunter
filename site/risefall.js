@@ -115,8 +115,9 @@
       return;
     }
     recent.forEach((tick) => {
-      const bar = document.createElement("span");
+      const bar = document.createElement("div");
       bar.className = `stream-bar ${tick.trend === "up" ? "rise" : tick.trend === "down" ? "fall" : "flat"}`;
+      bar.style.height = tick.trend === "up" ? "100%" : tick.trend === "down" ? "45%" : "20%";
       bar.title = `${tick.trend.toUpperCase()} · ${tick.quote}`;
       bar.setAttribute("aria-label", `${tick.trend} tick`);
       bars.appendChild(bar);

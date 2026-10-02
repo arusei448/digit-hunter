@@ -91,16 +91,16 @@
     .stream-title{font-size:13px;font-weight:600}
     .stream-subtitle{margin-top:4px;color:var(--quiet);font:10px var(--mono)}
     .stream-window{color:var(--quiet);font:10px var(--mono)}
-    .stream-bars{display:flex;align-items:stretch;gap:4px;height:66px}
-    .stream-empty{display:grid;place-items:center;flex:1;border:1px dashed #343943;border-radius:4px;color:var(--quiet);font-size:11px}
-    .stream-bar{position:relative;flex:1;min-width:2px;border-radius:3px;transform-origin:bottom;animation:bar-in .2s ease both}
-    .stream-bar.rise{background:linear-gradient(180deg,#a9dd7c,#659947)}
-    .stream-bar.fall{background:linear-gradient(180deg,#ee8982,#a84e51)}
-    .stream-bar.flat{background:#626b78}
+    .stream-bars{display:flex;align-items:flex-end;gap:5px;height:90px;padding:8px 0;border-bottom:1px solid #2a2e37}
+    .stream-empty{display:grid;place-items:center;align-self:stretch;flex:1;min-height:100%;border:1px dashed #343943;border-radius:4px;color:var(--quiet);font-size:11px}
+    .stream-bar{position:relative;flex:1;min-width:2px;min-height:6px;border-radius:3px 3px 0 0;transform-origin:bottom;animation:bar-in .2s ease both;transition:height .3s ease,background .3s ease}
+    .stream-bar.rise{background:linear-gradient(180deg,#00c853,#009624);box-shadow:0 0 8px rgba(0,200,83,.4)}
+    .stream-bar.fall{background:linear-gradient(180deg,#ff5252,#c62828);box-shadow:0 0 8px rgba(255,82,82,.4)}
+    .stream-bar.flat{background:#3a3f4a}
     @keyframes bar-in{from{opacity:.3;transform:scaleY(.35)}to{opacity:1;transform:scaleY(1)}}
     .stream-legend{display:flex;align-items:center;gap:18px;margin-top:13px;color:var(--muted);font-size:10px}
     .legend-item{display:flex;align-items:center;gap:7px}.legend-swatch{width:8px;height:8px;border-radius:2px}
-    .legend-swatch.rise{background:var(--lime)}.legend-swatch.fall{background:var(--coral)}.legend-swatch.flat{background:#626b78}
+    .legend-swatch.rise{background:#00c853}.legend-swatch.fall{background:#ff5252}.legend-swatch.flat{background:#3a3f4a}
     .disclaimer{display:flex;align-items:flex-start;gap:11px;margin-top:14px;padding:12px 14px;border:1px solid #39414a;border-radius:7px;background:#171a20;color:var(--muted);font-size:11px;line-height:1.55}
     .disclaimer-mark{flex:0 0 auto;color:#e8b978;font:500 11px var(--mono)}
     .disclaimer strong{color:var(--ink);font-weight:600}
@@ -166,6 +166,7 @@
       <div class="control-group window-controls" aria-label="Analysis window">
         <span class="window-label">Window</span>
         <button class="tf-btn" data-tf="10" type="button" aria-pressed="false">10</button>
+        <button class="tf-btn" data-tf="20" type="button" aria-pressed="false">20</button>
         <button class="tf-btn active" data-tf="50" type="button" aria-pressed="true">50</button>
         <button class="tf-btn" data-tf="100" type="button" aria-pressed="false">100</button>
         <span class="window-label">ticks</span>
