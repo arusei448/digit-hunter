@@ -1,0 +1,206 @@
+Good — market switch works. Now let's nail the width. If 950px still overflows, we'll drop to **820px** and make sure nothing inside is forcing extra width.
+
+---
+
+# Replit Agent Prompt — Final Width Fix
+
+Edit the existing Deriv Analytics project. Make ONLY the changes below.
+
+---
+
+## 🎯 Goal
+
+Both pages must fit at **100% browser zoom** without a horizontal scrollbar, even on laptops with 125% Windows display scaling.
+
+**Root cause:** The `.app` container is 950px, but on your display the effective viewport at 100% zoom is narrower than that. We need to reduce to **820px** and ensure every child element uses `max-width: 100%` and `box-sizing: border-box`.
+
+---
+
+## 📁 Files to Edit
+
+- `site/index.html`
+- `site/risefall.html`
+
+---
+
+## FIX — Tighten Layout Container
+
+### `site/index.html`
+
+Replace the current `.app` rule with:
+
+```css
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0f1117;
+    color: #e8eaed;
+    overflow-x: hidden;
+}
+
+.app {
+    max-width: 820px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 10px;
+    font-size: 13px;
+}
+
+@media (max-width: 860px) {
+    .app {
+        max-width: 100%;
+        padding: 8px;
+    }
+}
+```
+
+### `site/risefall.html`
+
+Replace the current `.app` rule with the same block:
+
+```css
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0f1117;
+    color: #e8eaed;
+    overflow-x: hidden;
+    min-height: 100vh;
+}
+
+.app {
+    max-width: 820px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 10px;
+    font-size: 13px;
+}
+
+@media (max-width: 860px) {
+    .app {
+        max-width: 100%;
+        padding: 8px;
+    }
+}
+```
+
+---
+
+## FIX — Ensure Nothing Else Forces Overflow
+
+### `site/index.html`
+
+Add these rules at the end of the `<style>` block (before `</style>`):
+
+```css
+.topnav, .header, .card, .digits-section, .history-section, .stats-bar,
+.timeframe-bar, #chart-container, .digits-row, .history-strip {
+    max-width: 100%;
+}
+
+.digits-row {
+    gap: 6px;
+}
+
+.digit-circle {
+    min-width: 0;
+    width: 100%;
+}
+
+#chart-container {
+    width: 100%;
+    overflow: hidden;
+}
+```
+
+### `site/risefall.html`
+
+Add these rules at the end of the `<style>` block (before `</style>`):
+
+```css
+.topnav, .header, .controls, .stats-grid, .direction-grid, .stream-section,
+.stat-card, .direction-card, .stream-bars {
+    max-width: 100%;
+}
+
+.stream-bars {
+    gap: 3px;
+}
+
+.stream-bar {
+    min-width: 0;
+}
+```
+
+---
+
+## FIX — Reduce Header and Nav Height Slightly
+
+### Both files
+
+Find the `.topnav` rule and reduce padding:
+
+```css
+.topnav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: #1a1d24;
+    border-bottom: 1px solid #2a2e37;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+```
+
+Find the `.header` rule and reduce padding:
+
+```css
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: #1a1d24;
+    border: 1px solid #2a2e37;
+    border-radius: 10px;
+    margin-bottom: 10px;
+}
+```
+
+---
+
+## ✅ Verification Checklist
+
+- [ ] Page fits at **100% zoom** with no horizontal scrollbar
+- [ ] Page fits at **125% Windows display scaling** with no zoom-out needed
+- [ ] Nav bar, header, chart, digit circles, stats, and stream all stay within the viewport
+- [ ] No element extends past the right edge
+- [ ] Vertical scroll works normally
+- [ ] Market switching still loads history instantly (do not touch this logic)
+- [ ] No regressions to anti-popping behavior
+
+## ⚠️ Do Not Change
+
+- The digit-0 extraction logic
+- The `/switch` endpoint logic (recently fixed)
+- The `initDigitElements()` and `initStreamBars()` functions
+- The navigation bar content (only reduce its padding)
+- The dark theme
+- The 65% momentum threshold
+- The market list
+- Any JavaScript logic
+
+---
+
+## 📸 After the fix
+
+1. Press **Ctrl+0** to reset zoom to 100%
+2. Open `/` — check that the whole page fits
+3. Open `/risefall` — check that the whole page fits
+4. Share a screenshot of each
+
+If it **still** overflows, I'll reduce further (760px), but 820px should be safe for almost any laptop.
