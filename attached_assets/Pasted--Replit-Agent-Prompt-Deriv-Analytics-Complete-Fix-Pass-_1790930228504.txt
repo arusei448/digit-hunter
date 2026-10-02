@@ -1,0 +1,485 @@
+# Replit Agent Prompt — Deriv Analytics: Complete Fix Pass
+
+Edit the existing **Deriv Analytics** project on Replit. Make ONLY the changes described below. Do NOT rebuild the project from scratch. Do NOT modify files that are not listed.
+
+---
+
+## 🎯 Summary of Fixes
+
+1. **Zoom / sizing** — make both pages fit a standard browser window at 100% zoom
+2. **Anti-popping** — stop the digits row and tick direction stream from flashing on every tick
+3. **Digit ring accuracy** — ensure only ONE digit shows "Latest", ONE shows "Most", ONE shows "Least"
+4. **Full-precision price** — ensure the price display shows the raw quote (no rounding) so the last digit is always correct — including `0`
+
+---
+
+## 📁 Files to Edit
+
+- `index.js`
+- `site/index.html`
+- `site/app.js`
+- `site/risefall.html`
+- `site/risefall.js`
+
+---
+
+## FIX 1 — Page Fits at 100% Zoom
+
+**Problem:** Users currently need to zoom out to ~70% to see the whole page.
+
+### `site/index.html` — CSS changes
+
+Replace the `.app` rule with:
+
+```css
+.app {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 16px;
+    font-size: 14px;
+}
+```
+
+Replace the `.header` rule with:
+
+```css
+.header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: #1a1d24;
+    border: 1px solid #2a2e37;
+    border-radius: 10px;
+    margin-bottom: 12px;
+}
+```
+
+Replace the `.card` rule with:
+
+```css
+.card {
+    background: #1a1d24;
+    border: 1px solid #2a2e37;
+    border-radius: 10px;
+    margin-bottom: 12px;
+    overflow: hidden;
+}
+```
+
+Reduce chart height in `site/app.js` (Lightweight Charts options):
+
+```javascript
+height: 280,   // was 360
+```
+
+Also reduce `.market-name` on both pages:
+
+```css
+.market-name { font-size: 14px; font-weight: 600; color: #fff; }
+```
+
+### `site/risefall.html` — CSS changes
+
+Replace `.app` with:
+
+```css
+.app {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 16px;
+    font-size: 14px;
+}
+```
+
+Replace `.controls` with:
+
+```css
+.controls {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    background: #1a1d24;
+    border: 1px solid #2a2e37;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+}
+```
+
+Replace `.stats-grid` with:
+
+```css
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 12px;
+}
+```
+
+Replace `.stat-card` with:
+
+```css
+.stat-card {
+    background: #1a1d24;
+    border: 1px solid #2a2e37;
+    border-radius: 10px;
+    padding: 14px;
+    text-align: center;
+}
+```
+
+Replace `.stat-value` with:
+
+```css
+.stat-value { font-size: 18px; font-weight: 700; }
+```
+
+Replace `.direction-card` with:
+
+```css
+.direction-card {
+    background: #1a1d24;
+    border: 1px solid #2a2e37;
+    border-radius: 10px;
+    padding: 14px;
+}
+```
+
+Replace `.stream-section` with:
+
+```css
+.stream-section {
+    background: #1a1d24;
+    border: 1px solid #2a2e37;
+    border-radius: 10px;
+    padding: 14px;
+}
+```
+
+Replace `.header h1` with:
+
+```css
+.header h1 { font-size: 18px; font-weight: 700; color: #fff; }
+```
+
+---
+
+## FIX 2 — Stop Elements from Popping / Flashing on Every Tick
+
+**Problem:** On every new tick, the digit row and stream are rebuilt with `innerHTML = ''`, causing visible flashing.
+
+**Solution:** Build the DOM elements ONCE at startup, then update only text and classes in place.
+
+### `site/app.js`
+
+**Add a new `initDigitElements()` function:**
+
+```javascript
+function initDigitElements() {
+    const container = document.getElementById('digits');
+    container.innerHTML = '';
+    for (let d = 0; d < 10; d++) {
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;flex:1;';
+
+        const circle = document.createElement('div');
+        circle.className = 'digit-circle';
+        circle.id = `digit-circle-${d}`;
+
+        const numSpan = document.createElement('span');
+        numSpan.id = `digit-num-${d}`;
+        numSpan.textContent = d;
+
+        const pctSpan = document.createElement('span');
+        pctSpan.className = 'digit-percent';
+        pctSpan.id = `digit-pct-${d}`;
+        pctSpan.textContent = '0.0%';
+
+        circle.appendChild(numSpan);
+        circle.appendChild(pctSpan);
+        wrap.appendChild(circle);
+
+        const label = document.createElement('div');
+        label.className = 'digit-label';
+        label.id = `digit-label-${d}`;
+        label.textContent = '';
+        wrap.appendChild(label);
+
+        container.appendChild(wrap);
+    }
+}
+```
+
+**Replace the entire `renderDigits()` function with:**
+
+```javascript
+function renderDigits() {
+    const total = allTicks.length;
+    if (total === 0) return;
+
+    const latestDigit = allTicks[total - 1].digit;
+
+    let hotDigit = 0, coldDigit = 0;
+    let maxCount = digitCounts[0], minCount = digitCounts[0];
+    for (let i = 1; i < 10; i++) {
+        if (digitCounts[i] > maxCount) { maxCount = digitCounts[i]; hotDigit = i; }
+        if (digitCounts[i] < minCount) { minCount = digitCounts[i]; coldDigit = i; }
+    }
+
+    for (let d = 0; d < 10; d++) {
+        const circle = document.getElementById(`digit-circle-${d}`);
+        const pctEl = document.getElementById(`digit-pct-${d}`);
+        const labelEl = document.getElementById(`digit-label-${d}`);
+        if (!circle) continue;
+
+        // Reset state
+        circle.classList.remove('latest', 'hot', 'cold');
+        labelEl.classList.remove('latest', 'hot', 'cold');
+        labelEl.textContent = '';
+
+        // Apply one state per digit — latest wins, then hot, then cold
+        if (d === latestDigit) {
+            circle.classList.add('latest');
+            labelEl.textContent = 'Latest';
+            labelEl.classList.add('latest');
+        } else if (d === hotDigit) {
+            circle.classList.add('hot');
+            labelEl.textContent = 'Most';
+            labelEl.classList.add('hot');
+        } else if (d === coldDigit) {
+            circle.classList.add('cold');
+            labelEl.textContent = 'Least';
+            labelEl.classList.add('cold');
+        }
+
+        const pct = ((digitCounts[d] / total) * 100).toFixed(1);
+        pctEl.textContent = pct + '%';
+    }
+
+    document.getElementById('total-ticks').textContent = total;
+    document.getElementById('latest-digit').textContent = latestDigit;
+    document.getElementById('hot-digit').textContent = hotDigit;
+    document.getElementById('cold-digit').textContent = coldDigit;
+}
+```
+
+**Replace `renderHistory()` with:**
+
+```javascript
+function renderHistory() {
+    const container = document.getElementById('history');
+    container.innerHTML = '';
+    const recent = allTicks.slice(-30).reverse();
+    for (const t of recent) {
+        const pill = document.createElement('div');
+        pill.className = `history-pill ${DIGIT_COLORS[t.digit] || ''}`;
+        pill.textContent = t.digit;
+        pill.style.animation = 'none';
+        container.appendChild(pill);
+    }
+}
+```
+
+**At the bottom of `app.js`, call init before initial render:**
+
+```javascript
+initDigitElements();
+renderDigits();
+renderHistory();
+```
+
+### `site/risefall.js`
+
+**Add an `initStreamBars()` function:**
+
+```javascript
+function initStreamBars() {
+    streamBars.innerHTML = '';
+    for (let i = 0; i < 40; i++) {
+        const bar = document.createElement('div');
+        bar.className = 'stream-bar';
+        bar.id = `stream-bar-${i}`;
+        bar.style.height = '6px';
+        streamBars.appendChild(bar);
+    }
+}
+```
+
+**Replace the entire `renderStream()` function with:**
+
+```javascript
+function renderStream() {
+    const recent = allTicks.slice(-40);
+    const padded = new Array(40 - recent.length).fill(null).concat(recent);
+
+    for (let i = 0; i < 40; i++) {
+        const bar = document.getElementById(`stream-bar-${i}`);
+        if (!bar) continue;
+        const t = padded[i];
+
+        bar.classList.remove('rise', 'fall', 'flat');
+
+        if (!t) {
+            bar.classList.add('flat');
+            bar.style.height = '6px';
+        } else if (t.trend === 'up') {
+            bar.classList.add('rise');
+            bar.style.height = '100%';
+        } else if (t.trend === 'down') {
+            bar.classList.add('fall');
+            bar.style.height = '45%';
+        } else {
+            bar.classList.add('flat');
+            bar.style.height = '20%';
+        }
+    }
+}
+```
+
+**At the bottom of `risefall.js`, call init before initial render:**
+
+```javascript
+initStreamBars();
+renderAll();
+```
+
+**Remove any `@keyframes slideIn` animation from `.history-pill` and any animation on `.stream-bar` in both HTML files' CSS.**
+
+---
+
+## FIX 3 — Ensure Only ONE Digit per Ring State
+
+The new `renderDigits()` in Fix 2 already handles this with an ordered `if / else if / else if` chain — only one digit can have `latest`, one `hot`, and one `cold`. Verify the OLD `renderDigits()` has been fully replaced.
+
+---
+
+## FIX 4 — Full Precision Price Display (Digit 0 Fix)
+
+**Problem:** Rounding the quote to 2 decimals hides the real last digit. When the raw quote ends in `0`, the badge shows the wrong digit.
+
+### `index.js` — WebSocket message handler
+
+Replace the block that builds `latestTick` with:
+
+```javascript
+if (msg.tick && msg.tick.quote !== undefined) {
+    const quoteRaw = msg.tick.quote.toString();
+    const quoteNum = parseFloat(quoteRaw);
+
+    const trend = previousQuote === null
+        ? 'flat'
+        : quoteNum > previousQuote ? 'up'
+        : quoteNum < previousQuote ? 'down'
+        : 'flat';
+    previousQuote = quoteNum;
+
+    latestTick = {
+        quote: quoteRaw,                       // full-precision string
+        digit: parseInt(quoteRaw.slice(-1)),   // from string, handles 0 correctly
+        timestamp: msg.tick.epoch || Math.floor(Date.now() / 1000),
+        trend: trend,
+        symbol: currentSymbol,
+        receivedAt: Date.now()
+    };
+
+    const payload = `data: ${JSON.stringify(latestTick)}\n\n`;
+    for (const client of sseClients) client.write(payload);
+
+    const directionPayload = `data: ${JSON.stringify({
+        quote: quoteRaw,
+        trend: trend,
+        timestamp: latestTick.timestamp,
+        symbol: currentSymbol
+    })}\n\n`;
+    for (const client of directionClients) client.write(directionPayload);
+}
+```
+
+### `index.js` — History handler
+
+Replace the `history` mapping with:
+
+```javascript
+if (msg.msg_type === 'history' && msg.history && msg.history.prices) {
+    const ticks = msg.history.prices.map((price, i) => ({
+        quote: price.toString(),
+        digit: parseInt(price.toString().slice(-1)),
+        timestamp: msg.history.times[i],
+        trend: 'flat'
+    }));
+    while (historyResolvers.length > 0) {
+        historyResolvers.shift()(ticks);
+    }
+    return;
+}
+```
+
+### `site/app.js` — SSE handler
+
+In the SSE `onmessage` handler, ensure the price uses the raw string (no `.toFixed()`):
+
+```javascript
+priceEl.textContent = quote;   // quote is already a string
+```
+
+And when storing ticks:
+
+```javascript
+allTicks.push({ quote: quote, digit, timestamp, trend });
+```
+
+In `rebuildChart()`:
+
+```javascript
+function rebuildChart() {
+    lineSeries.setData(allTicks.map(t => ({
+        time: t.timestamp,
+        value: parseFloat(t.quote)
+    })));
+}
+```
+
+### `site/risefall.js` — SSE handler
+
+Ensure the price uses the raw string:
+
+```javascript
+priceEl.textContent = quote;
+const lastDigit = parseInt(quote.toString().slice(-1));
+digitBadge.textContent = lastDigit;
+```
+
+---
+
+## ✅ Verification Checklist
+
+After all fixes, confirm:
+
+- [ ] Both pages fit within a normal browser window at 100% zoom — no zoom-out needed
+- [ ] Digit circles no longer flash or pop when a new tick arrives
+- [ ] Only the affected digit's percentage and ring state update on each tick
+- [ ] Only ONE digit shows a blue ring + "Latest" label
+- [ ] Only ONE digit shows a green ring + "Most" label
+- [ ] Only ONE digit shows a red ring + "Least" label
+- [ ] Digit `0` appears correctly and can be the latest digit
+- [ ] Price display shows full-precision quote (e.g., `5182.843`, not `5182.84`)
+- [ ] Digit badge matches the last character of the displayed price
+- [ ] Tick direction stream bars update in place — no whole-row flash
+- [ ] Rise bars are tall, fall bars are short, flat bars are minimal
+- [ ] Page scrolls vertically but never horizontally
+- [ ] Navigation between `/` and `/risefall` works instantly
+
+---
+
+## ⚠️ Do Not Change
+
+- The public WebSocket URL: `wss://api.derivws.com/trading/v1/options/ws/public`
+- The market list
+- The navigation bar
+- The dark theme colors (`#0f1117`, `#1a1d24`, `#2a2e37`)
+- The 65% momentum threshold
+- The digit-0 extraction logic (always extract from the raw quote string)

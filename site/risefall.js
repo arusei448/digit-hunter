@@ -19,6 +19,7 @@
   let switchingSymbol = null;
   let bufferedSwitchTicks = [];
   let stream = null;
+  let streamBars = [];
 
   function normalizeTick(source) {
     const quote = String(source.quote ?? "");
@@ -103,24 +104,31 @@
     $("market-symbol").textContent = `${tick.symbol || currentSymbol} · exact quote`;
   }
 
-  function renderStream() {
+  function initStreamBars() {
     const bars = $("stream-bars");
     bars.replaceChildren();
-    const recent = allTicks.slice(-40);
-    if (!recent.length) {
-      const empty = document.createElement("div");
-      empty.className = "stream-empty";
-      empty.textContent = "Direction ticks will appear as they arrive.";
-      bars.appendChild(empty);
-      return;
-    }
-    recent.forEach((tick) => {
+    streamBars = Array.from({ length: 40 }, (_, index) => {
       const bar = document.createElement("div");
-      bar.className = `stream-bar ${tick.trend === "up" ? "rise" : tick.trend === "down" ? "fall" : "flat"}`;
-      bar.style.height = tick.trend === "up" ? "100%" : tick.trend === "down" ? "45%" : "20%";
-      bar.title = `${tick.trend.toUpperCase()} · ${tick.quote}`;
-      bar.setAttribute("aria-label", `${tick.trend} tick`);
+      bar.className = "stream-bar flat";
+      bar.id = `stream-bar-${index}`;
+      bar.style.height = "6px";
       bars.appendChild(bar);
+      return bar;
+    });
+  }
+
+  function renderStream() {
+    const recent = allTicks.slice(-40);
+    const padding = streamBars.length - recent.length;
+    streamBars.forEach((bar, index) => {
+      const tick = recent[index - padding];
+      const trend = tick?.trend || "flat";
+      bar.classList.toggle("rise", trend === "up");
+      bar.classList.toggle("fall", trend === "down");
+      bar.classList.toggle("flat", trend === "flat");
+      bar.style.height = !tick ? "6px" : trend === "up" ? "100%" : trend === "down" ? "45%" : "20%";
+      bar.title = tick ? `${trend.toUpperCase()} · ${tick.quote}` : "";
+      bar.setAttribute("aria-label", tick ? `${trend} tick` : "No tick yet");
     });
   }
 
@@ -341,6 +349,8 @@
   $("market-select").addEventListener("change", (event) => switchMarket(event.target.value));
   $("retry-button").addEventListener("click", loadInitial);
 
+  initStreamBars();
+  renderStream();
   loadInitial().finally(connectStream);
   window.setInterval(() => {
     if (switching) return;

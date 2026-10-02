@@ -22,12 +22,13 @@
   let bufferedSwitchTicks = [];
   let stream = null;
   let lastChartTime = null;
+  let digitElements = [];
 
   function createChart() {
     if (!window.LightweightCharts || !chartContainer) return;
     chart = LightweightCharts.createChart(chartContainer, {
       width: chartContainer.clientWidth,
-      height: 292,
+      height: 280,
       layout: { background: { color: "#1a1d24" }, textColor: "#778390", fontFamily: '"DM Mono", monospace' },
       grid: { vertLines: { color: "#242830" }, horzLines: { color: "#242830" } },
       rightPriceScale: { borderColor: "#343943", scaleMargins: { top: .14, bottom: .12 } },
@@ -90,6 +91,29 @@
     $("chart-empty-copy").textContent = points.length ? "" : "Waiting for market history";
   }
 
+  function initDigitElements() {
+    const digits = $("digits");
+    digits.replaceChildren();
+    digitElements = Array.from({ length: 10 }, (_, digit) => {
+      const cell = document.createElement("div");
+      cell.className = "digit-cell";
+      const circle = document.createElement("div");
+      circle.className = "digit-circle";
+      const number = document.createElement("span");
+      number.className = "digit-number";
+      number.textContent = String(digit);
+      const percent = document.createElement("span");
+      percent.className = "digit-percent";
+      percent.textContent = "—";
+      circle.append(number, percent);
+      const label = document.createElement("span");
+      label.className = "digit-label";
+      cell.append(circle, label);
+      digits.appendChild(cell);
+      return { circle, percent, label };
+    });
+  }
+
   function renderDistribution() {
     const ticks = selectedTicks();
     const counts = Array(10).fill(0);
@@ -98,52 +122,31 @@
     const latest = total ? ticks[total - 1].digit : null;
     let hot = null;
     let cold = null;
-    let hotLabel = "";
-    let coldLabel = "";
-    if (total) {
-      hot = 0; cold = 0;
-      for (let digit = 1; digit < 10; digit += 1) {
+    if (total > 5) {
+      const candidates = Array.from({ length: 10 }, (_, digit) => digit)
+        .filter((digit) => digit !== latest);
+      hot = candidates[0];
+      for (const digit of candidates.slice(1)) {
         if (counts[digit] > counts[hot]) hot = digit;
-        if (counts[digit] < counts[cold]) cold = digit;
       }
-      if (total > 5) {
-        hotLabel = "Most";
-        coldLabel = "Least";
+      const coldCandidates = candidates.filter((digit) => digit !== hot);
+      cold = coldCandidates[0];
+      for (const digit of coldCandidates.slice(1)) {
+        if (counts[digit] < counts[cold]) cold = digit;
       }
     }
 
-    const digits = $("digits");
-    digits.replaceChildren();
     for (let digit = 0; digit < 10; digit += 1) {
-      const cell = document.createElement("div");
-      cell.className = "digit-cell";
-      const circle = document.createElement("div");
-      circle.className = "digit-circle";
-      if (digit === latest) circle.classList.add("latest");
-      else if (digit === hot && total > 5) circle.classList.add("hot");
-      else if (digit === cold && total > 5) circle.classList.add("cold");
-      const number = document.createElement("span");
-      number.className = "digit-number";
-      number.textContent = String(digit);
-      const percent = document.createElement("span");
-      percent.className = "digit-percent";
+      const { circle, percent, label } = digitElements[digit];
+      const isLatest = digit === latest;
+      const isHot = digit === hot;
+      const isCold = digit === cold;
+      circle.classList.toggle("latest", isLatest);
+      circle.classList.toggle("hot", isHot);
+      circle.classList.toggle("cold", isCold);
+      label.className = `digit-label${isLatest ? " latest" : isHot ? " hot" : isCold ? " cold" : ""}`;
+      label.textContent = isLatest ? "Latest" : isHot ? "Most" : isCold ? "Least" : "";
       percent.textContent = total ? `${((counts[digit] / total) * 100).toFixed(1)}%` : "—";
-      circle.append(number, percent);
-      const tag = document.createElement("span");
-      if (digit === latest && total) {
-        tag.className = "digit-label latest";
-        tag.textContent = "Latest";
-      } else if (digit === hot && total > 5) {
-        tag.className = "digit-label hot";
-        tag.textContent = hotLabel;
-      } else if (digit === cold && total > 5) {
-        tag.className = "digit-label cold";
-        tag.textContent = coldLabel;
-      } else {
-        tag.className = "digit-label";
-      }
-      cell.append(circle, tag);
-      digits.appendChild(cell);
     }
 
     $("distribution-note").textContent = `${total.toLocaleString()} ${total === 1 ? "tick" : "ticks"} in sample`;
@@ -410,6 +413,7 @@
   $("market-select").addEventListener("change", (event) => switchMarket(event.target.value));
   $("retry-button").addEventListener("click", () => loadInitial());
 
+  initDigitElements();
   createChart();
   window.addEventListener("resize", resizeChart);
   loadInitial().finally(connectStream);
