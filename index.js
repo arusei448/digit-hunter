@@ -16,6 +16,10 @@ const MARKETS = {
     R_100: 'Volatility 100 Index',
 };
 
+const ALL_MARKETS = Object.keys(MARKETS);
+const MARKET_BUFFER_LIMIT = 500;
+const MIN_ANALYSIS_TICKS = 20;
+
 const WS_URL = 'wss://api.derivws.com/trading/v1/options/ws/public';
 const PORT = Number(process.env.PORT) || 5000;
 const HISTORY_LIMIT = 1000;
@@ -39,6 +43,18 @@ const socketOpenWaiters = new Set();
 const historyWaiters = new Set();
 const sseClients = new Set();
 const directionClients = new Set();
+const aiClients = new Set();
+const marketBuffers = {};
+for (const symbol of ALL_MARKETS) {
+    marketBuffers[symbol] = {
+        quotes: [],
+        digits: [],
+        trends: [],
+        timestamps: [],
+        previousQuote: null,
+    };
+}
+const liveMarketSymbolsSeen = new Set();
 const MIME_TYPES = {
     '.html': 'text/html; charset=utf-8',
     '.js': 'text/javascript; charset=utf-8',
@@ -169,6 +185,52 @@ function installHistory(symbol, ticks) {
     for (const waiter of [...historyWaiters]) waiter.resolve();
 }
 
+function resetMarketBuffer(symbol) {
+    const buffer = marketBuffers[symbol];
+    if (!buffer) return;
+    buffer.quotes.length = 0;
+    buffer.digits.length = 0;
+    buffer.trends.length = 0;
+    buffer.timestamps.length = 0;
+    buffer.previousQuote = null;
+}
+
+function resetAllMarketBuffers() {
+    for (const symbol of ALL_MARKETS) resetMarketBuffer(symbol);
+}
+
+function appendMarketTick(symbol, price, digit, timestamp) {
+    const buffer = marketBuffers[symbol];
+    if (!buffer || price === null || digit === null) return null;
+
+    const trend = buffer.previousQuote === null
+        ? 'flat'
+        : price > buffer.previousQuote ? 'up'
+            : price < buffer.previousQuote ? 'down' : 'flat';
+    buffer.previousQuote = price;
+    buffer.quotes.push(price);
+    buffer.digits.push(digit);
+    buffer.trends.push(trend);
+    buffer.timestamps.push(timestamp);
+
+    if (buffer.quotes.length > MARKET_BUFFER_LIMIT) {
+        buffer.quotes.shift();
+        buffer.digits.shift();
+        buffer.trends.shift();
+        buffer.timestamps.shift();
+    }
+    return trend;
+}
+
+function seedMarketBuffer(symbol, ticks) {
+    resetMarketBuffer(symbol);
+    for (const tick of ticks.slice(-MARKET_BUFFER_LIMIT)) {
+        const price = numericQuote(tick.quote);
+        const digit = Number.isInteger(tick.digit) ? tick.digit : digitFromRawQuote(tick.quote);
+        appendMarketTick(symbol, price, digit, tick.timestamp);
+    }
+}
+
 function waitForHistory(timeoutMs = 15000) {
     if (historyLoaded) return Promise.resolve();
     return new Promise((resolve, reject) => {
@@ -207,6 +269,15 @@ function sendToSocket(socket, payload) {
         throw new Error('Deriv connection is not available');
     }
     socket.send(JSON.stringify(payload));
+}
+
+function subscribeAllMarkets(socket) {
+    liveMarketSymbolsSeen.clear();
+    for (const symbol of ALL_MARKETS) {
+        if (symbol === connectedSymbol) continue;
+        sendToSocket(socket, { ticks: symbol, subscribe: 1 });
+    }
+    console.log(`Subscribed to tick streams for ${ALL_MARKETS.length} markets`);
 }
 
 function waitForSocketOpen(timeoutMs = 30000) {
@@ -281,8 +352,10 @@ async function activateCurrentMarket(socket) {
     const ticks = await requestHistory(symbol, socket);
     if (socket !== ws || socket.readyState !== WebSocket.OPEN) return;
     installHistory(symbol, ticks);
+    seedMarketBuffer(symbol, ticks);
     sendToSocket(socket, { ticks: symbol, subscribe: 1 });
     connectedSymbol = symbol;
+    subscribeAllMarkets(socket);
     console.log(`Loaded ${ticks.length} history ticks for ${symbol}`);
 }
 
@@ -298,6 +371,10 @@ function switchMarket(symbol) {
         }
 
         const previousSymbol = currentSymbol;
+        const previousHistory = historicalTicks;
+        const previousLatestTick = latestTick;
+        const previousQuoteValue = previousQuote;
+        const previousHistoryLoaded = historyLoaded;
         sendToSocket(socket, { forget_all: 'ticks' });
         connectedSymbol = null;
         try {
@@ -307,8 +384,10 @@ function switchMarket(symbol) {
             }
 
             installHistory(symbol, ticks);
+            seedMarketBuffer(symbol, ticks);
             sendToSocket(socket, { ticks: symbol, subscribe: 1 });
             connectedSymbol = symbol;
+            subscribeAllMarkets(socket);
             console.log(`Switched to ${symbol} with ${ticks.length} history ticks`);
             return {
                 symbol,
@@ -318,15 +397,208 @@ function switchMarket(symbol) {
         } catch (error) {
             if (socket === ws && socket.readyState === WebSocket.OPEN) {
                 try {
+                    sendToSocket(socket, { forget_all: 'ticks' });
+                    connectedSymbol = null;
                     sendToSocket(socket, { ticks: previousSymbol, subscribe: 1 });
                     connectedSymbol = previousSymbol;
+                    subscribeAllMarkets(socket);
                 } catch (restoreError) {
                     console.error('Could not restore previous market subscription:', restoreError.message);
                 }
             }
+            currentSymbol = previousSymbol;
+            historicalTicks = previousHistory;
+            latestTick = previousLatestTick;
+            previousQuote = previousQuoteValue;
+            historyLoaded = previousHistoryLoaded;
             throw error;
         }
     });
+}
+
+function calculateRSquared(quotes) {
+    const n = quotes.length;
+    if (n < 5) return 0;
+
+    const meanX = (n - 1) / 2;
+    const meanY = quotes.reduce((sum, quote) => sum + quote, 0) / n;
+    let sumX2 = 0;
+    let sumY2 = 0;
+    let sumXY = 0;
+
+    for (let i = 0; i < n; i++) {
+        const centeredX = i - meanX;
+        const centeredY = quotes[i] - meanY;
+        sumX2 += centeredX * centeredX;
+        sumY2 += centeredY * centeredY;
+        sumXY += centeredX * centeredY;
+    }
+
+    const denominator = Math.sqrt(sumX2 * sumY2);
+    if (denominator === 0) return 0;
+    return Math.max(0, Math.min(1, (sumXY / denominator) ** 2));
+}
+
+function calculateRiseFallRatio(trends) {
+    const n = trends.length;
+    if (n === 0) return { up: 0, down: 0, upPct: 50, downPct: 50 };
+
+    let up = 0;
+    let down = 0;
+    for (const trend of trends) {
+        if (trend === 'up') up++;
+        else if (trend === 'down') down++;
+    }
+
+    return {
+        up,
+        down,
+        upPct: (up / n) * 100,
+        downPct: (down / n) * 100,
+    };
+}
+
+function calculateDigitDistribution(digits) {
+    const counts = new Array(10).fill(0);
+    for (const digit of digits) {
+        if (Number.isInteger(digit) && digit >= 0 && digit <= 9) counts[digit]++;
+    }
+
+    const n = digits.length;
+    const percentages = counts.map((count) => n > 0 ? (count / n) * 100 : 0);
+    const expected = n / 10;
+    let chiSq = 0;
+    if (expected > 0) {
+        for (const count of counts) {
+            chiSq += ((count - expected) ** 2) / expected;
+        }
+    }
+
+    return { counts, percentages, chiSq };
+}
+
+function calculateVolatility(quotes) {
+    if (quotes.length < 5) return 0;
+
+    const returns = [];
+    for (let i = 1; i < quotes.length; i++) {
+        const previous = quotes[i - 1];
+        if (previous !== 0) returns.push((quotes[i] - previous) / previous);
+    }
+    if (returns.length < 3) return 0;
+
+    const mean = returns.reduce((sum, value) => sum + value, 0) / returns.length;
+    const variance = returns.reduce((sum, value) => sum + (value - mean) ** 2, 0) / returns.length;
+    return Math.sqrt(variance);
+}
+
+function calculateHurstExponent(quotes) {
+    const series = quotes.slice(-100);
+    const n = series.length;
+    if (n < 20) return 0.5;
+
+    const mean = series.reduce((sum, value) => sum + value, 0) / n;
+    const deviations = series.map((value) => value - mean);
+    let cumulativeDeviation = 0;
+    let minDeviation = 0;
+    let maxDeviation = 0;
+    for (const deviation of deviations) {
+        cumulativeDeviation += deviation;
+        minDeviation = Math.min(minDeviation, cumulativeDeviation);
+        maxDeviation = Math.max(maxDeviation, cumulativeDeviation);
+    }
+
+    const range = maxDeviation - minDeviation;
+    const standardDeviation = Math.sqrt(
+        deviations.reduce((sum, value) => sum + value * value, 0) / n
+    );
+    if (range === 0 || standardDeviation === 0) return 0.5;
+
+    const estimate = Math.log(range / standardDeviation) / Math.log(n);
+    return Number.isFinite(estimate) ? Math.max(0, Math.min(1, estimate)) : 0.5;
+}
+
+function calculateStreak(trends) {
+    if (trends.length === 0) return { currentStreak: 0, direction: 'none' };
+
+    const direction = trends[trends.length - 1];
+    if (direction === 'flat') return { currentStreak: 0, direction: 'flat' };
+
+    let currentStreak = 0;
+    for (let i = trends.length - 1; i >= 0; i--) {
+        if (trends[i] !== direction) break;
+        currentStreak++;
+    }
+    return { currentStreak, direction };
+}
+
+function clampScore(score) {
+    return Math.round(Math.max(0, Math.min(100, score)));
+}
+
+function scoreMarketForTrendFollowing(features) {
+    let score = features.rSquared * 40;
+    const imbalance = Math.abs(features.riseFall.upPct - 50) / 50;
+    score += imbalance * 25;
+
+    if (features.hurst > 0.5) {
+        score += ((features.hurst - 0.5) / 0.5) * 20;
+    }
+
+    score += Math.min(features.volatility * 10000, 1) * 15;
+    return clampScore(score);
+}
+
+function scoreMarketForMeanReversion(features) {
+    let score = 0;
+
+    if (features.hurst < 0.5) {
+        score += ((0.5 - features.hurst) / 0.5) * 40;
+    }
+
+    score += Math.min(features.digitDistribution.chiSq / 20, 1) * 30;
+    score += (1 - features.rSquared) * 20;
+    score += Math.min(features.streak.currentStreak / 15, 1) * 10;
+    return clampScore(score);
+}
+
+function analyzeAllMarkets() {
+    const results = [];
+    for (const symbol of ALL_MARKETS) {
+        const buffer = marketBuffers[symbol];
+        if (!buffer || buffer.quotes.length < MIN_ANALYSIS_TICKS) continue;
+
+        const features = {
+            symbol,
+            name: MARKETS[symbol],
+            tickCount: buffer.quotes.length,
+            currentPrice: buffer.quotes[buffer.quotes.length - 1],
+            rSquared: calculateRSquared(buffer.quotes),
+            riseFall: calculateRiseFallRatio(buffer.trends),
+            digitDistribution: calculateDigitDistribution(buffer.digits),
+            volatility: calculateVolatility(buffer.quotes),
+            hurst: calculateHurstExponent(buffer.quotes),
+            streak: calculateStreak(buffer.trends),
+        };
+
+        features.trendScore = scoreMarketForTrendFollowing(features);
+        features.reversionScore = scoreMarketForMeanReversion(features);
+        results.push(features);
+    }
+
+    results.sort((a, b) => b.trendScore - a.trendScore);
+    return results;
+}
+
+function buildAIAnalysisPayload() {
+    const markets = analyzeAllMarkets();
+    const topReversion = markets.slice().sort((a, b) => b.reversionScore - a.reversionScore)[0] || null;
+    return {
+        timestamp: Date.now(),
+        markets,
+        topTrend: markets[0] || null,
+        topReversion,
+    };
 }
 
 function handleMessage(socket, data) {
@@ -358,7 +630,7 @@ function handleMessage(socket, data) {
 
     if (!msg.tick || msg.tick.quote === undefined || msg.tick.quote === null) return;
     const symbol = msg.tick.symbol || connectedSymbol;
-    if (!symbol || symbol !== currentSymbol) return;
+    if (!symbol) return;
 
     const quote = preserveQuotePrecision(
         extractRawTickQuote(rawMessage, msg.tick.quote),
@@ -367,6 +639,16 @@ function handleMessage(socket, data) {
     const price = numericQuote(quote);
     const digit = digitFromRawQuote(quote);
     if (price === null || digit === null) return;
+
+    const timestamp = Number(msg.tick.epoch) || Math.floor(Date.now() / 1000);
+    if (marketBuffers[symbol]) {
+        appendMarketTick(symbol, price, digit, timestamp);
+        if (!liveMarketSymbolsSeen.has(symbol)) {
+            liveMarketSymbolsSeen.add(symbol);
+            console.log(`Received first live multi-market tick for ${symbol}`);
+        }
+    }
+    if (symbol !== currentSymbol) return;
 
     const trend = previousQuote === null
         ? 'flat'
@@ -377,7 +659,7 @@ function handleMessage(socket, data) {
     const tick = {
         quote,
         digit,
-        timestamp: Number(msg.tick.epoch) || Math.floor(Date.now() / 1000),
+        timestamp,
         trend,
         symbol,
     };
@@ -436,6 +718,8 @@ function connectToDeriv() {
         if (socket !== ws) return;
         console.warn(`Deriv WebSocket closed (${code})${reason.length ? `: ${reason}` : ''}`);
         connectedSymbol = null;
+        resetAllMarketBuffers();
+        liveMarketSymbolsSeen.clear();
         rejectPendingHistory(socket, new Error('Deriv connection closed before history arrived'));
         scheduleReconnect();
     });
@@ -467,6 +751,24 @@ const server = http.createServer(async (req, res) => {
         res.write(': connected\n\n');
         clients.add(res);
         req.on('close', () => clients.delete(res));
+        return;
+    }
+
+    if (url.pathname === '/stream/ai') {
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream; charset=utf-8',
+            'Cache-Control': 'no-cache, no-transform',
+            Connection: 'keep-alive',
+            'X-Accel-Buffering': 'no',
+        });
+        res.write(': connected\n\n');
+        aiClients.add(res);
+        req.on('close', () => aiClients.delete(res));
+        return;
+    }
+
+    if (url.pathname === '/ai-analysis') {
+        sendJson(res, 200, buildAIAnalysisPayload());
         return;
     }
 
@@ -544,6 +846,11 @@ server.on('error', (error) => {
     console.error('HTTP server error:', error.message);
 });
 
+const aiBroadcastTimer = setInterval(() => {
+    if (aiClients.size === 0) return;
+    writeToClients(aiClients, buildAIAnalysisPayload());
+}, 5000);
+
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
 });
@@ -562,6 +869,7 @@ function shutdown() {
     if (shuttingDown) return;
     shuttingDown = true;
     clearInterval(keepAliveTimer);
+    clearInterval(aiBroadcastTimer);
     clearTimeout(reconnectTimer);
     for (const waiter of [...socketOpenWaiters]) {
         waiter.reject(new Error('Server is shutting down'));
