@@ -28,7 +28,7 @@
     if (!window.LightweightCharts || !chartContainer) return;
     chart = LightweightCharts.createChart(chartContainer, {
       width: chartContainer.clientWidth,
-      height: 280,
+      height: 260,
       layout: { background: { color: "#1a1d24" }, textColor: "#778390", fontFamily: '"DM Mono", monospace' },
       grid: { vertLines: { color: "#242830" }, horzLines: { color: "#242830" } },
       rightPriceScale: { borderColor: "#343943", scaleMargins: { top: .14, bottom: .12 } },
@@ -48,7 +48,10 @@
   }
 
   function resizeChart() {
-    if (chart && chartContainer) chart.applyOptions({ width: Math.max(1, chartContainer.clientWidth) });
+    if (!chart || !chartContainer) return;
+    const width = Math.max(1, chartContainer.clientWidth);
+    const height = width <= 520 ? 245 : 260;
+    chart.applyOptions({ width, height });
   }
 
   function extractDigit(quote) {
@@ -283,7 +286,8 @@
       if (historyData.symbol && historyData.symbol !== symbol) {
         const refreshed = await requestJson(`/switch?symbol=${encodeURIComponent(symbol)}`);
         if (refreshed.symbol !== symbol) throw new Error("The market switch was not confirmed.");
-        historyData = await requestJson("/history");
+        if (!Array.isArray(refreshed.history)) throw new Error("The selected market history was not included in the switch response.");
+        historyData = { symbol: refreshed.symbol, history: refreshed.history };
       }
       if (historyData.symbol && historyData.symbol !== symbol) throw new Error("Received history for a different market.");
       const history = Array.isArray(historyData.history) ? historyData.history : [];
@@ -319,10 +323,9 @@
     try {
       const switched = await requestJson(`/switch?symbol=${encodeURIComponent(symbol)}`);
       if (!switched.symbol || switched.symbol !== symbol) throw new Error("Market switch was not confirmed by the data service.");
+      if (!Array.isArray(switched.history)) throw new Error("The selected market history was not included in the switch response.");
       setMarketIdentity(symbol);
-      const data = await requestJson("/history");
-      if (data.symbol && data.symbol !== symbol) throw new Error("Received history for a different market.");
-      const historyTicks = (data.history || []).map(normalizeTick).filter(Boolean);
+      const historyTicks = switched.history.map(normalizeTick).filter(Boolean);
       allTicks = mergeBufferedTicks(historyTicks, bufferedSwitchTicks);
       const latest = allTicks[allTicks.length - 1];
       if (latest) updateQuote(latest);
@@ -335,12 +338,14 @@
       setConnection("offline", "Switch failed");
       try {
         const markets = await requestJson("/markets");
+        let restored;
         if (markets.current !== previousSymbol) {
-          await requestJson(`/switch?symbol=${encodeURIComponent(previousSymbol)}`);
+          restored = await requestJson(`/switch?symbol=${encodeURIComponent(previousSymbol)}`);
+        } else {
+          restored = await requestJson("/history");
         }
-        const restored = await requestJson("/history");
-        if (restored.symbol === previousSymbol) {
-          allTicks = (restored.history || []).map(normalizeTick).filter(Boolean);
+        if (restored.symbol === previousSymbol && Array.isArray(restored.history)) {
+          allTicks = restored.history.map(normalizeTick).filter(Boolean);
           const latest = allTicks[allTicks.length - 1];
           if (latest) updateQuote(latest);
         }

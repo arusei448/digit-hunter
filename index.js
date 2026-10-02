@@ -290,7 +290,11 @@ function switchMarket(symbol) {
     return enqueueMarketOperation(async () => {
         const socket = await waitForSocketOpen();
         if (symbol === currentSymbol && historyLoaded && connectedSymbol === symbol) {
-            return { symbol, historyCount: historicalTicks.length };
+            return {
+                symbol,
+                historyCount: historicalTicks.length,
+                history: historicalTicks,
+            };
         }
 
         const previousSymbol = currentSymbol;
@@ -306,7 +310,11 @@ function switchMarket(symbol) {
             sendToSocket(socket, { ticks: symbol, subscribe: 1 });
             connectedSymbol = symbol;
             console.log(`Switched to ${symbol} with ${ticks.length} history ticks`);
-            return { symbol, historyCount: ticks.length };
+            return {
+                symbol,
+                historyCount: ticks.length,
+                history: historicalTicks,
+            };
         } catch (error) {
             if (socket === ws && socket.readyState === WebSocket.OPEN) {
                 try {

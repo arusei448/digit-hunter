@@ -257,10 +257,9 @@
     try {
       const switched = await requestJson(`/switch?symbol=${encodeURIComponent(symbol)}`);
       if (!switched.symbol || switched.symbol !== symbol) throw new Error("Market switch was not confirmed by the data service.");
+      if (!Array.isArray(switched.history)) throw new Error("The selected market history was not included in the switch response.");
       currentSymbol = symbol;
-      const data = await requestJson("/history/direction?count=1000");
-      if (data.symbol && data.symbol !== symbol) throw new Error("Received history for a different market.");
-      const historyTicks = (data.ticks || []).map(normalizeTick).filter(Boolean);
+      const historyTicks = switched.history.map(normalizeTick).filter(Boolean);
       allTicks = mergeBufferedTicks(historyTicks, bufferedSwitchTicks);
       const latest = allTicks[allTicks.length - 1];
       if (latest) updatePrice(latest);
@@ -276,14 +275,21 @@
       try {
         const markets = await requestJson("/markets");
         if (markets.current !== previousSymbol) {
-          await requestJson(`/switch?symbol=${encodeURIComponent(previousSymbol)}`);
-        }
-        const restored = await requestJson("/history/direction?count=1000");
-        if (restored.symbol === previousSymbol) {
-          allTicks = (restored.ticks || []).map(normalizeTick).filter(Boolean);
-          const latest = allTicks[allTicks.length - 1];
-          if (latest) updatePrice(latest);
-          $("market-symbol").textContent = `${previousSymbol} · exact quote`;
+          const restored = await requestJson(`/switch?symbol=${encodeURIComponent(previousSymbol)}`);
+          if (restored.symbol === previousSymbol && Array.isArray(restored.history)) {
+            allTicks = restored.history.map(normalizeTick).filter(Boolean);
+            const latest = allTicks[allTicks.length - 1];
+            if (latest) updatePrice(latest);
+            $("market-symbol").textContent = `${previousSymbol} · exact quote`;
+          }
+        } else {
+          const restored = await requestJson("/history/direction?count=1000");
+          if (restored.symbol === previousSymbol) {
+            allTicks = (restored.ticks || []).map(normalizeTick).filter(Boolean);
+            const latest = allTicks[allTicks.length - 1];
+            if (latest) updatePrice(latest);
+            $("market-symbol").textContent = `${previousSymbol} · exact quote`;
+          }
         }
       } catch {
         // Keep the switch error visible if the previous market cannot be restored.

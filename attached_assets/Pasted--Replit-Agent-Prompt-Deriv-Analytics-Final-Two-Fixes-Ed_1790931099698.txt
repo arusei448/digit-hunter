@@ -1,0 +1,265 @@
+# Replit Agent Prompt — Deriv Analytics: Final Two Fixes
+
+Edit the existing **Deriv Analytics** project on Replit. Make ONLY the changes described below. Do NOT rebuild the project from scratch. Do NOT modify files that are not listed.
+
+---
+
+## 🎯 Summary
+
+Two fixes remain:
+
+1. **Zoom / sizing** — both pages currently overflow horizontally at 100% browser zoom, forcing users to zoom out to ~70%. Make them fit at 100% on standard screens (including 125% Windows display scaling).
+2. **Market switch history** — when switching markets, the chart and digit circles start empty and slowly fill. They should populate **instantly** with the last 200 ticks from Deriv.
+
+---
+
+## 📁 Files to Edit
+
+- `index.js`
+- `site/app.js`
+- `site/index.html`
+- `site/risefall.html`
+- `site/risefall.js`
+
+---
+
+## FIX 1 — Make Both Pages Fit at 100% Zoom
+
+**Problem:** The `.app` container is 1100px wide, which overflows on laptops with 125% display scaling (effective viewport ~1024px). Users must zoom out to see the whole page.
+
+**Solution:** Reduce max-width to **950px** and add a responsive fallback for narrow viewports.
+
+### `site/index.html` — CSS changes
+
+Replace the existing `.app` rule with:
+
+```css
+.app {
+    max-width: 950px;
+    margin: 0 auto;
+    padding: 12px;
+    font-size: 13px;
+}
+
+@media (max-width: 1000px) {
+    .app {
+        max-width: 100%;
+        padding: 10px;
+    }
+}
+```
+
+Replace the `.header h1` rule with:
+
+```css
+.header h1 { font-size: 17px; font-weight: 700; color: #fff; }
+```
+
+Replace the `.market-name` rule with:
+
+```css
+.market-name { font-size: 13px; font-weight: 600; color: #fff; }
+```
+
+### `site/risefall.html` — CSS changes
+
+Replace the existing `.app` rule with:
+
+```css
+.app {
+    max-width: 950px;
+    margin: 0 auto;
+    padding: 12px;
+    font-size: 13px;
+}
+
+@media (max-width: 1000px) {
+    .app {
+        max-width: 100%;
+        padding: 10px;
+    }
+}
+```
+
+Replace the `.header h1` rule with:
+
+```css
+.header h1 { font-size: 17px; font-weight: 700; color: #fff; }
+```
+
+Replace the `.market-name` rule with:
+
+```css
+.market-name { font-size: 13px; font-weight: 600; color: #fff; }
+```
+
+### `site/app.js` — Reduce chart height
+
+In the Lightweight Charts options object, change:
+
+```javascript
+height: 280,
+```
+
+to:
+
+```javascript
+height: 260,
+```
+
+---
+
+## FIX 2 — Market Switch Loads History Instantly
+
+**Problem:** When the user switches markets, the frontend sends `/switch?symbol=XXX` and then separately fetches `/history`. Those two requests race — the frontend's `/history` fetch often resolves **before** the backend has received the tick history from Deriv's WebSocket. Result: empty chart, empty digits, slowly fills with live ticks.
+
+**Solution:** Return the historical ticks **directly in the `/switch` response**. No second request. No race condition.
+
+### `index.js` — Replace the entire `/switch` block
+
+Find the block that begins with `if (req.url.startsWith('/switch'))` and replace the entire block with:
+
+```javascript
+if (req.url.startsWith('/switch')) {
+    const url = new URL(req.url, `http://localhost:${PORT}`);
+    const newSymbol = url.searchParams.get('symbol');
+
+    if (!newSymbol || !MARKETS[newSymbol]) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid symbol' }));
+        return;
+    }
+
+    currentSymbol = newSymbol;
+    previousQuote = null;
+    latestTick = null;
+    historicalTicks = [];
+
+    ws.send(JSON.stringify({ forget_all: 'ticks' }));
+
+    // Fetch history and await the Deriv response
+    const ticks = await fetchHistory(newSymbol);
+    historicalTicks = ticks;
+
+    // Subscribe to live ticks for the new symbol
+    ws.send(JSON.stringify({ ticks: newSymbol, subscribe: 1 }));
+
+    console.log('Switched to:', newSymbol, 'with', ticks.length, 'history ticks');
+
+    // Return the history directly in this response
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+        symbol: currentSymbol,
+        history: ticks.slice(-1000)
+    }));
+    return;
+}
+```
+
+### `site/app.js` — Replace the market select handler
+
+Find the existing `market-select` change listener (it currently does a `/switch` fetch followed by a separate `/history` fetch). Replace the entire listener with:
+
+```javascript
+document.getElementById('market-select').addEventListener('change', async (e) => {
+    const symbol = e.target.value;
+
+    const res = await fetch(`/switch?symbol=${symbol}`);
+    const data = await res.json();
+
+    // Populate allTicks directly from the switch response — no second fetch
+    allTicks = (data.history || []).map(t => ({
+        quote: t.quote,
+        digit: t.digit,
+        timestamp: t.timestamp,
+        trend: t.trend
+    }));
+
+    trimToWindow();
+    recomputeDigitCounts();
+
+    renderDigits();
+    renderHistory();
+    rebuildChart();
+
+    document.getElementById('market-name').textContent =
+        e.target.options[e.target.selectedIndex].text;
+});
+```
+
+### `site/risefall.js` — Replace the market select handler
+
+Find the existing `market-select` change listener and replace the entire listener with:
+
+```javascript
+document.getElementById('market-select').addEventListener('change', async (e) => {
+    const symbol = e.target.value;
+
+    const res = await fetch(`/switch?symbol=${symbol}`);
+    const data = await res.json();
+
+    // Convert raw history into tick objects with computed trend
+    const hist = data.history || [];
+    allTicks = [];
+    for (let i = 1; i < hist.length; i++) {
+        const prev = parseFloat(hist[i - 1].quote);
+        const cur = parseFloat(hist[i].quote);
+        const trend = cur > prev ? 'up' : cur < prev ? 'down' : 'flat';
+        allTicks.push({
+            quote: hist[i].quote,
+            trend: trend,
+            timestamp: hist[i].timestamp
+        });
+    }
+
+    if (allTicks.length > 1000) {
+        allTicks = allTicks.slice(-1000);
+    }
+
+    renderAll();
+
+    document.getElementById('market-name').textContent =
+        e.target.options[e.target.selectedIndex].text;
+});
+```
+
+---
+
+## ✅ Verification Checklist
+
+After both fixes, confirm:
+
+- [ ] Both pages fit within a standard browser window at **100% zoom** — no horizontal scrollbar
+- [ ] At 125% Windows display scaling, pages still fit without zoom-out
+- [ ] Switching markets on the Digits page instantly populates the chart, digit circles, and recent digits strip — no more empty start
+- [ ] Switching markets on the Rise & Fall page instantly populates the stats cards, direction bars, and tick stream
+- [ ] Total Ticks shows ~200 immediately after switch (not 0)
+- [ ] Live ticks continue streaming smoothly after switch
+- [ ] Navigation between `/` and `/risefall` still works
+- [ ] No regressions to the anti-popping fixes (digit circles and stream bars still update in place)
+
+## ⚠️ Do Not Change
+
+- The digit-0 extraction logic: `parseInt(quoteRaw.slice(-1))` — must stay untouched
+- The public WebSocket URL: `wss://api.derivws.com/trading/v1/options/ws/public`
+- The `initDigitElements()` and `initStreamBars()` functions — these prevent the flashing/popping
+- The ordered `if / else if / else if` chain in `renderDigits()` — ensures only ONE digit shows each ring state
+- The navigation bar
+- The dark theme colors
+- The 65% momentum threshold
+- The market list
+
+---
+
+## 📸 Testing Instructions for the User
+
+After the Agent applies these changes:
+
+1. Press **Ctrl+0** (Windows) or **⌘+0** (Mac) to reset browser zoom to 100%
+2. Open `/` — confirm the page fits without horizontal scrolling
+3. Open `/risefall` — confirm the same
+4. On the Digits page, switch markets — confirm the chart and digit circles fill **instantly**
+5. On the Rise & Fall page, switch markets — confirm the stats and stream fill **instantly**
+6. Watch both pages for 60 seconds — confirm no flashing or popping
+
+Report back with screenshots of both pages immediately after a market switch.
