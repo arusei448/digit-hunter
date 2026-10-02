@@ -21,12 +21,16 @@ let latestTick = null;
 let previousQuote = null;
 let historicalTicks = [];
 let historyResolvers = [];
+
+// Two separate SSE client pools:
+// - sseClients: dashboard page (needs quote + digit)
+// - directionClients: rise/fall page (needs quote + trend)
 const sseClients = new Set();
+const directionClients = new Set();
 
 const WS_URL = 'wss://api.derivws.com/trading/v1/options/ws/public';
 const PORT = process.env.PORT || 3000;
 
-// Helper: returns a promise that resolves with historical ticks
 function fetchHistory(symbol) {
     return new Promise((resolve) => {
         historyResolvers.push(resolve);
@@ -41,6 +45,8 @@ function fetchHistory(symbol) {
 }
 
 const server = http.createServer(async (req, res) => {
+
+    // ----- SSE: main dashboard (tick + digit) -----
     if (req.url === '/stream') {
         res.writeHead(200, {
             'Content-Type': 'text/event-stream',
@@ -54,13 +60,34 @@ const server = http.createServer(async (req, res) => {
         }
 
         sseClients.add(res);
-
-        req.on('close', () => {
-            sseClients.delete(res);
-        });
+        req.on('close', () => sseClients.delete(res));
         return;
     }
 
+    // ----- SSE: rise/fall direction stream -----
+    if (req.url === '/stream/direction') {
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'Access-Control-Allow-Origin': '*'
+        });
+
+        if (latestTick) {
+            res.write(`data: ${JSON.stringify({
+                quote: latestTick.quote,
+                trend: latestTick.trend,
+                timestamp: latestTick.timestamp,
+                symbol: latestTick.symbol
+            })}\n\n`);
+        }
+
+        directionClients.add(res);
+        req.on('close', () => directionClients.delete(res));
+        return;
+    }
+
+    // ----- Switch market -----
     if (req.url.startsWith('/switch')) {
         const url = new URL(req.url, `http://localhost:${PORT}`);
         const newSymbol = url.searchParams.get('symbol');
@@ -72,7 +99,6 @@ const server = http.createServer(async (req, res) => {
 
             ws.send(JSON.stringify({ forget_all: 'ticks' }));
 
-            // Fetch history and wait for it
             const ticks = await fetchHistory(newSymbol);
             historicalTicks = ticks;
 
@@ -84,18 +110,49 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // ----- History for main dashboard -----
     if (req.url === '/history') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ history: historicalTicks, symbol: currentSymbol }));
         return;
     }
 
+    // ----- History for rise/fall page -----
+    if (req.url.startsWith('/history/direction')) {
+        const url = new URL(req.url, `http://localhost:${PORT}`);
+        const count = parseInt(url.searchParams.get('count')) || 100;
+        // Build trend info from historical ticks (consecutive quotes)
+        const ticks = historicalTicks.slice(-count);
+        const enriched = [];
+        for (let i = 1; i < ticks.length; i++) {
+            const prev = ticks[i - 1].quote;
+            const cur = ticks[i].quote;
+            const trend = cur > prev ? 'up' : cur < prev ? 'down' : 'flat';
+            enriched.push({
+                quote: cur,
+                trend,
+                timestamp: ticks[i].timestamp,
+                symbol: currentSymbol
+            });
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ticks: enriched, symbol: currentSymbol }));
+        return;
+    }
+
+    // ----- Market list -----
     if (req.url === '/markets') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ markets: MARKETS, current: currentSymbol }));
         return;
     }
 
+    // ----- Serve static files -----
+    if (req.url === '/risefall') {
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end(fs.readFileSync(path.join(__dirname, 'site', 'risefall.html')));
+        return;
+    }
     let filePath = req.url === '/' ? '/index.html' : req.url;
     filePath = path.join(__dirname, 'site', filePath);
 
@@ -137,7 +194,6 @@ ws.on('message', (data) => {
             timestamp: msg.history.times[i],
             trend: 'flat'
         }));
-        // Resolve any pending history requests
         while (historyResolvers.length > 0) {
             const resolve = historyResolvers.shift();
             resolve(ticks);
@@ -147,7 +203,11 @@ ws.on('message', (data) => {
 
     if (msg.tick && msg.tick.quote) {
         const quote = msg.tick.quote;
-        const trend = previousQuote === null ? 'flat' : (quote > previousQuote ? 'up' : quote < previousQuote ? 'down' : 'flat');
+        const trend = previousQuote === null
+            ? 'flat'
+            : quote > previousQuote ? 'up'
+            : quote < previousQuote ? 'down'
+            : 'flat';
         previousQuote = quote;
 
         latestTick = {
@@ -159,9 +219,21 @@ ws.on('message', (data) => {
             receivedAt: Date.now()
         };
 
+        // Push to main dashboard clients
         const payload = `data: ${JSON.stringify(latestTick)}\n\n`;
         for (const client of sseClients) {
             client.write(payload);
+        }
+
+        // Push to rise/fall clients (smaller payload)
+        const directionPayload = `data: ${JSON.stringify({
+            quote: quote,
+            trend: trend,
+            timestamp: latestTick.timestamp,
+            symbol: currentSymbol
+        })}\n\n`;
+        for (const client of directionClients) {
+            client.write(directionPayload);
         }
     }
 });

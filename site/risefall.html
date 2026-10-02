@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rise & Fall Analysis</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f1117;
+            color: #e8eaed;
+            min-height: 100vh;
+        }
+        .app { max-width: 1200px; margin: 0 auto; padding: 24px; }
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+        }
+        .header h1 { font-size: 22px; font-weight: 700; color: #fff; }
+        .live-badge {
+            display: flex; align-items: center; gap: 6px;
+            background: #122318; padding: 6px 12px;
+            border-radius: 20px; font-size: 12px; color: #00c853;
+            font-weight: 600;
+        }
+        .live-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: #00c853; animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse { 0%{opacity:1} 50%{opacity:0.3} 100%{opacity:1} }
+        .controls {
+            display: flex; gap: 16px; flex-wrap: wrap;
+            align-items: center; justify-content: space-between;
+            background: #1a1d24; border: 1px solid #2a2e37;
+            border-radius: 12px; padding: 16px 20px; margin-bottom: 20px;
+        }
+        .control-group { display: flex; align-items: center; gap: 10px; }
+        .control-label { font-size: 13px; color: #8892a0; font-weight: 500; }
+        select, .tf-btn {
+            background: #0f1117; border: 1px solid #2a2e37;
+            color: #e8eaed; padding: 8px 14px; border-radius: 8px;
+            font-size: 13px; cursor: pointer; outline: none;
+        }
+        select:hover, .tf-btn:hover { border-color: #4a9eff; }
+        .tf-btn.active { background: #4a9eff; color: #fff; border-color: #4a9eff; }
+        .price-display { display: flex; align-items: center; gap: 10px; }
+        .price-value { font-size: 24px; font-weight: 700; color: #fff; }
+        .digit-badge {
+            width: 40px; height: 40px; border-radius: 50%;
+            background: #00c853; color: #fff;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 18px;
+        }
+        .stats-grid {
+            display: grid; grid-template-columns: repeat(3, 1fr);
+            gap: 16px; margin-bottom: 20px;
+        }
+        .stat-card {
+            background: #1a1d24; border: 1px solid #2a2e37;
+            border-radius: 12px; padding: 20px; text-align: center;
+        }
+        .stat-label { font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+        .stat-value { font-size: 22px; font-weight: 700; }
+        .stat-value.green { color: #00c853; }
+        .stat-value.red { color: #ff5252; }
+        .stat-value.blue { color: #4a9eff; }
+        .direction-grid {
+            display: grid; grid-template-columns: 1fr 1fr;
+            gap: 16px; margin-bottom: 20px;
+        }
+        .direction-card {
+            background: #1a1d24; border: 1px solid #2a2e37;
+            border-radius: 12px; padding: 20px;
+        }
+        .direction-title { font-size: 16px; font-weight: 700; margin-bottom: 12px; }
+        .direction-title.rise { color: #00c853; }
+        .direction-title.fall { color: #ff5252; }
+        .progress-bar {
+            width: 100%; height: 10px; background: #232730;
+            border-radius: 5px; overflow: hidden; margin-bottom: 12px;
+        }
+        .progress-fill {
+            height: 100%; transition: width 0.3s ease;
+        }
+        .progress-fill.rise { background: #00c853; }
+        .progress-fill.fall { background: #ff5252; }
+        .direction-counts {
+            display: flex; justify-content: space-between;
+            font-size: 14px; font-weight: 600; margin-bottom: 8px;
+        }
+        .direction-note { font-size: 12px; color: #6b7280; line-height: 1.5; }
+        .stream-section {
+            background: #1a1d24; border: 1px solid #2a2e37;
+            border-radius: 12px; padding: 20px;
+        }
+        .stream-title {
+            font-size: 12px; color: #6b7280; text-transform: uppercase;
+            letter-spacing: 0.5px; margin-bottom: 12px;
+        }
+        .stream-bars {
+            display: flex; gap: 4px; align-items: flex-end;
+            height: 60px;
+        }
+        .stream-bar {
+            flex: 1; border-radius: 3px 3px 0 0;
+            transition: height 0.2s ease, background 0.2s ease;
+            min-height: 8px;
+        }
+        .stream-bar.rise { background: #00c853; height: 100%; }
+        .stream-bar.fall { background: #ff5252; height: 40%; }
+        .stream-legend {
+            display: flex; gap: 16px; margin-top: 10px;
+            font-size: 12px; color: #6b7280;
+        }
+        .legend-item { display: flex; align-items: center; gap: 6px; }
+        .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+        @media (max-width: 768px) {
+            .stats-grid, .direction-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <div class="header">
+            <h1>Rise & Fall</h1>
+            <div class="live-badge">
+                <span class="live-dot"></span> Live
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <span class="control-label">Select Market:</span>
+                <select id="market-select">
+                    <option value="1HZ10V">1s V10</option>
+                    <option value="1HZ25V">1s V25</option>
+                    <option value="1HZ50V">1s V50</option>
+                    <option value="1HZ75V">1s V75</option>
+                    <option value="1HZ100V" selected>1s V100</option>
+                    <option value="R_10">V10</option>
+                    <option value="R_25">V25</option>
+                    <option value="R_50">V50</option>
+                    <option value="R_75">V75</option>
+                    <option value="R_100">V100</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <span class="control-label">Analysis window:</span>
+                <button class="tf-btn" data-tf="10">10</button>
+                <button class="tf-btn active" data-tf="50">50</button>
+                <button class="tf-btn" data-tf="100">100</button>
+            </div>
+
+            <div class="price-display">
+                <span class="control-label">Price</span>
+                <span class="price-value" id="price">--</span>
+                <span class="digit-badge" id="digit-badge">--</span>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Net Change</div>
+                <div class="stat-value blue" id="net-change">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Change %</div>
+                <div class="stat-value blue" id="change-pct">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Direction</div>
+                <div class="stat-value" id="direction">--</div>
+            </div>
+        </div>
+
+        <div class="direction-grid">
+            <div class="direction-card">
+                <div class="direction-title rise">↗ RISE</div>
+                <div class="progress-bar">
+                    <div class="progress-fill rise" id="rise-bar" style="width: 50%"></div>
+                </div>
+                <div class="direction-counts">
+                    <span>Up ticks</span>
+                    <span id="rise-counts">0 / 0 (0%)</span>
+                </div>
+                <div class="direction-note" id="rise-note">Waiting for data...</div>
+            </div>
+
+            <div class="direction-card">
+                <div class="direction-title fall">↘ FALL</div>
+                <div class="progress-bar">
+                    <div class="progress-fill fall" id="fall-bar" style="width: 50%"></div>
+                </div>
+                <div class="direction-counts">
+                    <span>Down ticks</span>
+                    <span id="fall-counts">0 / 0 (0%)</span>
+                </div>
+                <div class="direction-note" id="fall-note">Waiting for data...</div>
+            </div>
+        </div>
+
+        <div class="stream-section">
+            <div class="stream-title">Tick Direction Stream · Last 40</div>
+            <div class="stream-bars" id="stream-bars"></div>
+            <div class="stream-legend">
+                <div class="legend-item"><div class="legend-dot" style="background:#00c853"></div> Rise tick</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#ff5252"></div> Fall tick</div>
+            </div>
+        </div>
+    </div>
+    <script src="/risefall.js"></script>
+</body>
+</html>
