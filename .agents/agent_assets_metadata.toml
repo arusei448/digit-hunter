@@ -1,0 +1,16 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "DNf_8v1hB5Vpeah9DiL0E"
+uri = "file://screenshots/ai-analysis.jpg"
+type = "image"
+title = "AI analysis endpoint snapshot"
+description = "Verified screenshot of /ai-analysis returning the live 10-market analysis JSON."
+logical_id = "6d9db921-1ff9-409b-913d-fb762d9c967d"
+content_hash = "sha256:35d9f9c9e0e4eba24a9ed81915b498d0c2cb2b0c9359f652806dfc0ccca9d2c3"
+size = 424853
+mtime_ms = 1791058754052
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:7fb43c5c-3b4d-4732-963e-481e39ed6ce6/6d9db921-1ff9-409b-913d-fb762d9c967d/4a6d4034-7731-4ac1-8bd7-7c15c515548d"
+storage_version_token = "1791058774687425"
+content_type = "image/jpeg"

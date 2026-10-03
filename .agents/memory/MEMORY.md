@@ -1,1 +1,2 @@
 - [Deriv quote precision](deriv-quote-precision.md) — pad quote strings to the API's pip_size before extracting the last digit, or trailing zero digits disappear.
+- [Analysis-score framing](analysis-score-framing.md) — Keep market scores descriptive and heuristic; never present them as predictions or probabilities.
