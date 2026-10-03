@@ -92,9 +92,9 @@
     .stream-title{font-size:13px;font-weight:600}
     .stream-subtitle{margin-top:4px;color:var(--quiet);font:10px var(--mono)}
     .stream-window{color:var(--quiet);font:10px var(--mono)}
-    .stream-bars{display:flex;align-items:flex-end;gap:5px;height:70px;padding:8px 0;border-bottom:1px solid #2a2e37}
+    .stream-bars{display:flex;align-items:flex-end;gap:5px;height:90px;padding:8px 0;border-bottom:1px solid #2a2e37;contain:layout paint}
     .stream-empty{display:grid;place-items:center;align-self:stretch;flex:1;min-height:100%;border:1px dashed #343943;border-radius:4px;color:var(--quiet);font-size:11px}
-    .stream-bar{position:relative;flex:1;min-width:2px;min-height:6px;border-radius:3px 3px 0 0;transform-origin:bottom;transition:height .3s ease,background .3s ease}
+    .stream-bar{position:relative;flex:1;min-width:2px;min-height:6px;border-radius:3px 3px 0 0;transform-origin:bottom;transition:height 120ms linear,background 120ms linear;will-change:height}
     .stream-bar.rise{background:linear-gradient(180deg,#00c853,#009624);box-shadow:0 0 8px rgba(0,200,83,.4)}
     .stream-bar.fall{background:linear-gradient(180deg,#ff5252,#c62828);box-shadow:0 0 8px rgba(255,82,82,.4)}
     .stream-bar.flat{background:#3a3f4a}

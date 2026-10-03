@@ -1,0 +1,446 @@
+Replit Agent Prompt — AI Analyser Enhancements + Continuous Stream Fix
+Edit the existing Deriv Analytics project on Replit. Make ONLY the changes described below. Do NOT rebuild the project from scratch. Do NOT modify existing routes or logic unless explicitly stated.
+
+📁 Files to Edit
+index.js (AI analyser feature extraction + scoring)
+
+site/ai-analyser.html (new metric columns + strategy descriptions)
+
+site/ai-analyser.js (render new metrics)
+
+site/risefall.js (continuous stream fix)
+
+site/risefall.html (CSS smoothing for stream bars)
+
+PART 1 — Expand AI Analyser with Rise/Fall-Specific Strategy Concepts
+Goal: The analyser currently uses only trend strength, rise/fall ratio, digit skew, volatility, Hurst exponent, and streak. Add seven new rise/fall-specific metrics so the analyser produces a richer, more accurate ranking.
+
+New Feature Functions — Add to index.js
+Add these functions above the analyzeAllMarkets() function:
+
+javascript
+// ---------- New Rise/Fall Strategy Metrics ----------
+
+function calculateEMA(values, period) {
+    if (values.length === 0) return 0;
+    const k = 2 / (period + 1);
+    let ema = values[0];
+    for (let i = 1; i < values.length; i++) {
+        ema = values[i] * k + ema * (1 - k);
+    }
+    return ema;
+}
+
+function calculateRSI(quotes, period = 14) {
+    // RSI on tick-to-tick price changes
+    if (quotes.length < period + 1) return 50;
+    let gains = 0, losses = 0;
+    for (let i = quotes.length - period; i < quotes.length; i++) {
+        const diff = quotes[i] - quotes[i - 1];
+        if (diff > 0) gains += diff;
+        else losses -= diff;
+    }
+    const avgGain = gains / period;
+    const avgLoss = losses / period;
+    if (avgLoss === 0) return 100;
+    const rs = avgGain / avgLoss;
+    return 100 - (100 / (1 + rs));
+}
+
+function calculateTickVelocity(timestamps) {
+    // Ticks per second over the last 10 ticks
+    const n = Math.min(10, timestamps.length);
+    if (n < 2) return 0;
+    const span = timestamps[timestamps.length - 1] - timestamps[timestamps.length - n];
+    if (span <= 0) return 0;
+    return n / span;
+}
+
+function calculateWeightedPressure(quotes) {
+    // EMA-weighted price change — measures directional pressure
+    if (quotes.length < 5) return 0;
+    const recent = quotes.slice(-20);
+    let weighted = 0;
+    let weightSum = 0;
+    for (let i = 1; i < recent.length; i++) {
+        const change = recent[i] - recent[i - 1];
+        const weight = i; // newer changes weigh more
+        weighted += change * weight;
+        weightSum += weight;
+    }
+    return weightSum > 0 ? weighted / weightSum : 0;
+}
+
+function calculateBollingerPosition(quotes, period = 20) {
+    // Where is current price relative to Bollinger Bands?
+    // Returns -1 (below lower), 0 (middle), +1 (above upper)
+    if (quotes.length < period) return 0;
+    const recent = quotes.slice(-period);
+    const mean = recent.reduce((a, b) => a + b, 0) / period;
+    const variance = recent.reduce((a, q) => a + Math.pow(q - mean, 2), 0) / period;
+    const stdDev = Math.sqrt(variance);
+    if (stdDev === 0) return 0;
+    const current = quotes[quotes.length - 1];
+    const zScore = (current - mean) / stdDev;
+    if (zScore > 1.5) return 1;
+    if (zScore < -1.5) return -1;
+    return 0;
+}
+
+function calculateRunLengthStats(trends) {
+    // Average run length and max run length
+    if (trends.length < 5) return { avgRun: 0, maxRun: 0, runsCount: 0 };
+    let runs = [];
+    let currentRun = 1;
+    for (let i = 1; i < trends.length; i++) {
+        if (trends[i] === trends[i - 1] && trends[i] !== 'flat') {
+            currentRun++;
+        } else {
+            if (currentRun > 0) runs.push(currentRun);
+            currentRun = 1;
+        }
+    }
+    runs.push(currentRun);
+    const avgRun = runs.reduce((a, b) => a + b, 0) / runs.length;
+    const maxRun = Math.max(...runs);
+    return { avgRun, maxRun, runsCount: runs.length };
+}
+
+function calculateAutocorrelation(quotes) {
+    // Lag-1 autocorrelation — measures mean-reversion tendency
+    // Positive = trending, negative = mean-reverting
+    const n = quotes.length;
+    if (n < 10) return 0;
+    const returns = [];
+    for (let i = 1; i < n; i++) {
+        returns.push(quotes[i] - quotes[i - 1]);
+    }
+    const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
+    let num = 0, den = 0;
+    for (let i = 1; i < returns.length; i++) {
+        num += (returns[i] - mean) * (returns[i - 1] - mean);
+    }
+    for (let i = 0; i < returns.length; i++) {
+        den += Math.pow(returns[i] - mean, 2);
+    }
+    return den > 0 ? num / den : 0;
+}
+Enrich analyzeAllMarkets() — Add New Fields
+Inside analyzeAllMarkets(), after the existing features object is built, add these new fields:
+
+javascript
+features.rsi = calculateRSI(buf.quotes, 14);
+features.ema20 = calculateEMA(buf.quotes.slice(-20), 20);
+features.tickVelocity = calculateTickVelocity(buf.timestamps);
+features.weightedPressure = calculateWeightedPressure(buf.quotes);
+features.bollingerPosition = calculateBollingerPosition(buf.quotes, 20);
+features.runStats = calculateRunLengthStats(buf.trends);
+features.autocorrelation = calculateAutocorrelation(buf.quotes);
+Expanded Scoring — Replace Both Scoring Functions
+Replace scoreMarketForTrendFollowing and scoreMarketForMeanReversion with:
+
+javascript
+function scoreMarketForTrendFollowing(features) {
+    let score = 0;
+
+    // 1. Trend strength (R²) — 25%
+    score += features.rSquared * 25;
+
+    // 2. Rise/Fall imbalance — 15% (deviation from 50/50)
+    const imbalance = Math.abs(features.riseFall.upPct - 50) / 50;
+    score += imbalance * 15;
+
+    // 3. Hurst exponent — 15% (> 0.5 = trending)
+    if (features.hurst > 0.5) {
+        score += ((features.hurst - 0.5) / 0.5) * 15;
+    }
+
+    // 4. RSI alignment — 15% (strong directional move = RSI away from 50)
+    const rsiDeviation = Math.abs(features.rsi - 50) / 50;
+    score += rsiDeviation * 15;
+
+    // 5. Positive autocorrelation — 15% (momentum persists)
+    if (features.autocorrelation > 0) {
+        score += Math.min(features.autocorrelation * 2, 1) * 15;
+    }
+
+    // 6. Weighted pressure — 10% (strong directional bias)
+    const pressureStrength = Math.min(Math.abs(features.weightedPressure) * 100, 1);
+    score += pressureStrength * 10;
+
+    // 7. Bollinger position — 5% (near band = trend continuation)
+    score += Math.abs(features.bollingerPosition) * 5;
+
+    return Math.round(score);
+}
+
+function scoreMarketForMeanReversion(features) {
+    let score = 0;
+
+    // 1. Hurst exponent — 20% (lower = more mean-reverting)
+    if (features.hurst < 0.5) {
+        score += ((0.5 - features.hurst) / 0.5) * 20;
+    }
+
+    // 2. Negative autocorrelation — 25% (strong mean-reversion signal)
+    if (features.autocorrelation < 0) {
+        score += Math.min(Math.abs(features.autocorrelation) * 2, 1) * 25;
+    }
+
+    // 3. RSI near extremes — 15% (>70 or <30 = overbought/oversold)
+    const rsiExtreme = Math.max(0, (features.rsi - 70) / 30) + Math.max(0, (30 - features.rsi) / 30);
+    score += Math.min(rsiExtreme, 1) * 15;
+
+    // 4. Digit skew (chi-square) — 15%
+    const skewScore = Math.min(features.digitDistribution.chiSq / 20, 1);
+    score += skewScore * 15;
+
+    // 5. Long streaks — 10% (streaks are more likely to reverse)
+    const streakScore = Math.min(features.streak.currentStreak / 15, 1);
+    score += streakScore * 10;
+
+    // 6. Bollinger extreme — 10% (price at band = reversal candidate)
+    score += Math.abs(features.bollingerPosition) * 10;
+
+    // 7. Low R² — 5% (weak trend = ranging)
+    score += (1 - features.rSquared) * 5;
+
+    return Math.round(score);
+}
+PART 2 — Update AI Analyser Page to Display New Metrics
+site/ai-analyser.html — Expand Table Columns
+Replace the <thead> block with:
+
+html
+<thead>
+    <tr>
+        <th>#</th>
+        <th>Market</th>
+        <th>Price</th>
+        <th>Score</th>
+        <th class="hide-mobile">R²</th>
+        <th class="hide-mobile">Rise%</th>
+        <th class="hide-mobile">RSI</th>
+        <th class="hide-mobile">Autocorr</th>
+        <th class="hide-mobile">Hurst</th>
+        <th class="hide-mobile">Velocity</th>
+        <th class="hide-mobile">Pressure</th>
+    </tr>
+</thead>
+site/ai-analyser.js — Render New Columns
+Replace the render() function's table-building section with:
+
+javascript
+const risePct = m.riseFall.upPct;
+const riseClass = risePct > 50 ? 'green' : risePct < 50 ? 'red' : '';
+
+const rsiClass = m.rsi > 70 ? 'red' : m.rsi < 30 ? 'green' : '';
+const autoClass = m.autocorrelation > 0.05 ? 'green'
+                : m.autocorrelation < -0.05 ? 'red' : '';
+const pressureClass = m.weightedPressure > 0 ? 'green'
+                    : m.weightedPressure < 0 ? 'red' : '';
+
+tr.innerHTML = `
+    <td><span class="rank-badge ${rankClass}">${i + 1}</span></td>
+    <td class="market-cell">${m.name}</td>
+    <td class="num-cell">${m.currentPrice.toFixed(2)}</td>
+    <td>
+        <span class="score-bar"><span class="score-bar-fill" style="width:${score}%"></span></span>
+        <span class="score-cell">${score}</span>
+    </td>
+    <td class="num-cell hide-mobile">${m.rSquared.toFixed(2)}</td>
+    <td class="num-cell ${riseClass} hide-mobile">${risePct.toFixed(1)}%</td>
+    <td class="num-cell ${rsiClass} hide-mobile">${m.rsi.toFixed(1)}</td>
+    <td class="num-cell ${autoClass} hide-mobile">${m.autocorrelation.toFixed(3)}</td>
+    <td class="num-cell hide-mobile">${m.hurst.toFixed(2)}</td>
+    <td class="num-cell hide-mobile">${m.tickVelocity.toFixed(1)}/s</td>
+    <td class="num-cell ${pressureClass} hide-mobile">${m.weightedPressure.toFixed(4)}</td>
+`;
+site/ai-analyser.js — Enhanced Rationale Builder
+Replace buildRationale() with:
+
+javascript
+function buildRationale(market) {
+    const parts = [];
+
+    if (currentStrategy === 'trend') {
+        if (market.rSquared > 0.7) parts.push(`<strong>Strong trend</strong> (R² ${market.rSquared.toFixed(2)})`);
+        else if (market.rSquared > 0.4) parts.push(`Moderate trend (R² ${market.rSquared.toFixed(2)})`);
+
+        if (market.riseFall.upPct > 60) parts.push(`bullish momentum (${market.riseFall.upPct.toFixed(0)}% up)`);
+        else if (market.riseFall.upPct < 40) parts.push(`bearish momentum (${(100 - market.riseFall.upPct).toFixed(0)}% down)`);
+
+        if (market.autocorrelation > 0.05) parts.push(`positive autocorr (${market.autocorrelation.toFixed(3)}) = momentum persists`);
+        if (market.rsi > 60) parts.push(`RSI ${market.rsi.toFixed(0)} bullish`);
+        else if (market.rsi < 40) parts.push(`RSI ${market.rsi.toFixed(0)} bearish`);
+    } else {
+        if (market.hurst < 0.45) parts.push(`Hurst ${market.hurst.toFixed(2)} = <strong>mean-reverting</strong>`);
+        if (market.autocorrelation < -0.05) parts.push(`negative autocorr (${market.autocorrelation.toFixed(3)}) = reversal tendency`);
+        if (market.digitDistribution.chiSq > 15) parts.push(`digit skew χ²=${market.digitDistribution.chiSq.toFixed(1)}`);
+        if (market.rsi > 70) parts.push(`RSI ${market.rsi.toFixed(0)} overbought`);
+        else if (market.rsi < 30) parts.push(`RSI ${market.rsi.toFixed(0)} oversold`);
+        if (market.streak.currentStreak >= 4) parts.push(`${market.streak.currentStreak}-tick ${market.streak.direction} streak`);
+    }
+
+    return parts.join(' · ') || 'Analysing conditions…';
+}
+site/ai-analyser.js — Add Metric Descriptions
+Add a small info box below the header (in site/ai-analyser.html):
+
+html
+<div class="metric-guide">
+    <strong>Metrics:</strong>
+    <span><b>R²</b> — trend strength (0–1)</span> ·
+    <span><b>Rise%</b> — up-tick ratio</span> ·
+    <span><b>RSI</b> — momentum (&gt;70 overbought, &lt;30 oversold)</span> ·
+    <span><b>Autocorr</b> — lag-1 autocorrelation (positive = trending, negative = mean-reverting)</span> ·
+    <span><b>Hurst</b> — &gt;0.5 trending, &lt;0.5 mean-reverting</span> ·
+    <span><b>Velocity</b> — ticks per second</span> ·
+    <span><b>Pressure</b> — EMA-weighted price change</span>
+</div>
+Add this CSS for the guide:
+
+css
+.metric-guide {
+    background: #14161c;
+    border: 1px solid #2a2e37;
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    font-size: 11px;
+    color: #6b7280;
+    line-height: 1.8;
+}
+.metric-guide strong { color: #8892a0; margin-right: 6px; }
+.metric-guide span { display: inline-block; }
+.metric-guide b { color: #e8eaed; font-weight: 600; }
+PART 3 — Fix Rise & Fall Stream: Continuous Updates, No Pause
+Problem: The tick direction stream on the Rise & Fall page visibly pauses ("thinking") between updates instead of flowing continuously.
+
+Root cause: Three issues combine:
+
+SSE backpressure — the server writes to the client on every tick, but if the client is slow, the Node.js socket buffer fills and the write becomes async, causing visible batching.
+
+DOM thrash — renderStream() reassigns bar.style.height on 40 elements every tick, forcing layout recalculation.
+
+No CSS transition continuity — the browser may drop in-between frames if the change happens during a repaint.
+
+Fix A — Backend: Debounce SSE Writes to ~60ms
+In index.js, find where the SSE broadcasts happen (inside ws.on('message')). Replace the direct client.write(payload) loop with a batched broadcast queue:
+
+javascript
+// Add near the top of index.js, with the other state:
+let directionBroadcastPending = false;
+let directionBuffer = [];
+
+function queueDirectionBroadcast(tick) {
+    directionBuffer.push(tick);
+    if (directionBroadcastPending) return;
+    directionBroadcastPending = true;
+    setTimeout(() => {
+        const batch = directionBuffer;
+        directionBuffer = [];
+        directionBroadcastPending = false;
+        if (batch.length === 0) return;
+        // Send only the latest tick (batching collapses duplicates)
+        const latest = batch[batch.length - 1];
+        const payload = `data: ${JSON.stringify(latest)}\n\n`;
+        for (const client of directionClients) {
+            try { client.write(payload); } catch (e) { directionClients.delete(client); }
+        }
+    }, 60);
+}
+Then, inside ws.on('message'), replace the for (const client of directionClients) { client.write(directionPayload); } block with:
+
+javascript
+queueDirectionBroadcast({
+    quote: quoteRaw,
+    trend: trend,
+    timestamp: latestTick.timestamp,
+    symbol: currentSymbol
+});
+Do the same for the main /stream broadcast — wrap it in a similar batched queue (call it queueMainBroadcast), so both streams stay smooth.
+
+Fix B — Frontend: Use requestAnimationFrame for DOM Updates
+In site/risefall.js, wrap the stream rendering in a requestAnimationFrame scheduler so updates are synced to the browser's paint cycle:
+
+javascript
+let rafPending = false;
+
+function scheduleRender() {
+    if (rafPending) return;
+    rafPending = true;
+    requestAnimationFrame(() => {
+        rafPending = false;
+        renderStream();
+        renderStats();
+    });
+}
+Then in the SSE onmessage handler, replace the direct renderAll() call with scheduleRender().
+
+Fix C — CSS: Smoother Bar Transitions
+In site/risefall.html, update the .stream-bar CSS:
+
+css
+.stream-bar {
+    flex: 1;
+    border-radius: 3px 3px 0 0;
+    transition: height 120ms linear, background 120ms linear;
+    min-height: 6px;
+    will-change: height;
+}
+Also add to .stream-bars:
+
+css
+.stream-bars {
+    display: flex;
+    gap: 5px;
+    align-items: flex-end;
+    height: 90px;
+    padding: 8px 0;
+    border-bottom: 1px solid #2a2e37;
+    contain: layout paint;
+}
+The contain: layout paint tells the browser this container's layout doesn't affect anything outside it — a big performance win.
+
+Fix D — SSE Heartbeat
+Add a heartbeat to prevent the browser from buffering during quiet periods. In index.js, alongside the AI broadcast interval, add:
+
+javascript
+setInterval(() => {
+    for (const client of directionClients) {
+        try { client.write(`: heartbeat\n\n`); } catch (e) {}
+    }
+    for (const client of sseClients) {
+        try { client.write(`: heartbeat\n\n`); } catch (e) {}
+    }
+}, 15000);
+(The : prefix is an SSE comment — the browser ignores it, but it keeps the TCP connection warm and prevents proxy buffering.)
+
+✅ Verification Checklist
+□ AI Analyser shows new columns: RSI, Autocorr, Velocity, Pressure
+□ Metric guide box appears under the header
+□ Top Pick card rationale mentions the new metrics when relevant
+□ Trend-Following ranking changes when new metrics shift
+□ Mean-Reversion ranking changes when new metrics shift
+□ Rise & Fall stream updates continuously — no visible pause between ticks
+□ Stream bars transition smoothly with the 120ms CSS transition
+□ No console errors about requestAnimationFrame
+□ No regressions to Digits page, Rise & Fall stats, or nav
+□ No regressions to digit-0 detection or anti-popping
+⚠️ Do Not Change
+The public WebSocket URL
+
+The market list
+
+The /switch, /history, /history/direction endpoints
+
+The digit-0 extraction logic
+
+The initDigitElements() and initStreamBars() functions
+
+The dark theme colors
+
+The nav bar
+
+The 65% momentum threshold

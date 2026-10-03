@@ -44,6 +44,10 @@ const historyWaiters = new Set();
 const sseClients = new Set();
 const directionClients = new Set();
 const aiClients = new Set();
+let mainBroadcastPending = false;
+let mainBuffer = [];
+let directionBroadcastPending = false;
+let directionBuffer = [];
 const marketBuffers = {};
 for (const symbol of ALL_MARKETS) {
     marketBuffers[symbol] = {
@@ -264,6 +268,30 @@ function writeToClients(clients, payload) {
             clients.delete(client);
         }
     }
+}
+
+function queueMainBroadcast(tick) {
+    mainBuffer.push(tick);
+    if (mainBroadcastPending) return;
+    mainBroadcastPending = true;
+    setTimeout(() => {
+        const batch = mainBuffer;
+        mainBuffer = [];
+        mainBroadcastPending = false;
+        if (batch.length > 0) writeToClients(sseClients, batch[batch.length - 1]);
+    }, 60);
+}
+
+function queueDirectionBroadcast(tick) {
+    directionBuffer.push(tick);
+    if (directionBroadcastPending) return;
+    directionBroadcastPending = true;
+    setTimeout(() => {
+        const batch = directionBuffer;
+        directionBuffer = [];
+        directionBroadcastPending = false;
+        if (batch.length > 0) writeToClients(directionClients, batch[batch.length - 1]);
+    }, 60);
 }
 
 function sendToSocket(socket, payload) {
@@ -534,33 +562,149 @@ function calculateStreak(trends) {
     return { currentStreak, direction };
 }
 
+function calculateEMA(values, period) {
+    if (values.length === 0) return 0;
+    const k = 2 / (period + 1);
+    let ema = values[0];
+    for (let i = 1; i < values.length; i++) {
+        ema = values[i] * k + ema * (1 - k);
+    }
+    return ema;
+}
+
+function calculateRSI(quotes, period = 14) {
+    if (quotes.length < period + 1) return 50;
+    let gains = 0;
+    let losses = 0;
+    for (let i = quotes.length - period; i < quotes.length; i++) {
+        const difference = quotes[i] - quotes[i - 1];
+        if (difference > 0) gains += difference;
+        else if (difference < 0) losses -= difference;
+    }
+    const averageGain = gains / period;
+    const averageLoss = losses / period;
+    if (averageLoss === 0) return averageGain === 0 ? 50 : 100;
+    const relativeStrength = averageGain / averageLoss;
+    return 100 - (100 / (1 + relativeStrength));
+}
+
+function calculateTickVelocity(timestamps) {
+    const count = Math.min(10, timestamps.length);
+    if (count < 2) return 0;
+    const span = timestamps[timestamps.length - 1] - timestamps[timestamps.length - count];
+    if (span <= 0) return 0;
+    return count / span;
+}
+
+function calculateWeightedPressure(quotes) {
+    if (quotes.length < 5) return 0;
+    const recent = quotes.slice(-20);
+    let weightedChange = 0;
+    let weightSum = 0;
+    for (let i = 1; i < recent.length; i++) {
+        const change = recent[i] - recent[i - 1];
+        const weight = i;
+        weightedChange += change * weight;
+        weightSum += weight;
+    }
+    return weightSum > 0 ? weightedChange / weightSum : 0;
+}
+
+function calculateBollingerPosition(quotes, period = 20) {
+    if (quotes.length < period) return 0;
+    const recent = quotes.slice(-period);
+    const mean = recent.reduce((sum, quote) => sum + quote, 0) / period;
+    const variance = recent.reduce((sum, quote) => sum + (quote - mean) ** 2, 0) / period;
+    const standardDeviation = Math.sqrt(variance);
+    if (standardDeviation === 0) return 0;
+    const zScore = (quotes[quotes.length - 1] - mean) / standardDeviation;
+    if (zScore > 1.5) return 1;
+    if (zScore < -1.5) return -1;
+    return 0;
+}
+
+function calculateRunLengthStats(trends) {
+    if (trends.length < 5) return { avgRun: 0, maxRun: 0, runsCount: 0 };
+    const runs = [];
+    let direction = null;
+    let currentRun = 0;
+    for (const trend of trends) {
+        if (trend === 'flat') {
+            if (currentRun > 0) runs.push(currentRun);
+            direction = null;
+            currentRun = 0;
+        } else if (trend === direction) {
+            currentRun++;
+        } else {
+            if (currentRun > 0) runs.push(currentRun);
+            direction = trend;
+            currentRun = 1;
+        }
+    }
+    if (currentRun > 0) runs.push(currentRun);
+    if (runs.length === 0) return { avgRun: 0, maxRun: 0, runsCount: 0 };
+    return {
+        avgRun: runs.reduce((sum, run) => sum + run, 0) / runs.length,
+        maxRun: Math.max(...runs),
+        runsCount: runs.length,
+    };
+}
+
+function calculateAutocorrelation(quotes) {
+    if (quotes.length < 10) return 0;
+    const returns = [];
+    for (let i = 1; i < quotes.length; i++) {
+        returns.push(quotes[i] - quotes[i - 1]);
+    }
+    const mean = returns.reduce((sum, value) => sum + value, 0) / returns.length;
+    let numerator = 0;
+    let denominator = 0;
+    for (let i = 1; i < returns.length; i++) {
+        numerator += (returns[i] - mean) * (returns[i - 1] - mean);
+    }
+    for (const value of returns) {
+        denominator += (value - mean) ** 2;
+    }
+    return denominator > 0 ? numerator / denominator : 0;
+}
+
 function clampScore(score) {
     return Math.round(Math.max(0, Math.min(100, score)));
 }
 
 function scoreMarketForTrendFollowing(features) {
-    let score = features.rSquared * 40;
+    let score = features.rSquared * 25;
     const imbalance = Math.abs(features.riseFall.upPct - 50) / 50;
-    score += imbalance * 25;
-
+    score += imbalance * 15;
     if (features.hurst > 0.5) {
-        score += ((features.hurst - 0.5) / 0.5) * 20;
+        score += ((features.hurst - 0.5) / 0.5) * 15;
     }
-
-    score += Math.min(features.volatility * 10000, 1) * 15;
+    const rsiDeviation = Math.abs(features.rsi - 50) / 50;
+    score += rsiDeviation * 15;
+    if (features.autocorrelation > 0) {
+        score += Math.min(features.autocorrelation * 2, 1) * 15;
+    }
+    const pressureStrength = Math.min(Math.abs(features.weightedPressure) * 100, 1);
+    score += pressureStrength * 10;
+    score += Math.abs(features.bollingerPosition) * 5;
     return clampScore(score);
 }
 
 function scoreMarketForMeanReversion(features) {
     let score = 0;
-
     if (features.hurst < 0.5) {
-        score += ((0.5 - features.hurst) / 0.5) * 40;
+        score += ((0.5 - features.hurst) / 0.5) * 20;
     }
-
-    score += Math.min(features.digitDistribution.chiSq / 20, 1) * 30;
-    score += (1 - features.rSquared) * 20;
+    if (features.autocorrelation < 0) {
+        score += Math.min(Math.abs(features.autocorrelation) * 2, 1) * 25;
+    }
+    const rsiExtreme = Math.max(0, (features.rsi - 70) / 30)
+        + Math.max(0, (30 - features.rsi) / 30);
+    score += Math.min(rsiExtreme, 1) * 15;
+    score += Math.min(features.digitDistribution.chiSq / 20, 1) * 15;
     score += Math.min(features.streak.currentStreak / 15, 1) * 10;
+    score += Math.abs(features.bollingerPosition) * 10;
+    score += (1 - features.rSquared) * 5;
     return clampScore(score);
 }
 
@@ -583,6 +727,13 @@ function analyzeAllMarkets() {
             streak: calculateStreak(buffer.trends),
         };
 
+        features.rsi = calculateRSI(buffer.quotes, 14);
+        features.ema20 = calculateEMA(buffer.quotes.slice(-20), 20);
+        features.tickVelocity = calculateTickVelocity(buffer.timestamps);
+        features.weightedPressure = calculateWeightedPressure(buffer.quotes);
+        features.bollingerPosition = calculateBollingerPosition(buffer.quotes, 20);
+        features.runStats = calculateRunLengthStats(buffer.trends);
+        features.autocorrelation = calculateAutocorrelation(buffer.quotes);
         features.trendScore = scoreMarketForTrendFollowing(features);
         features.reversionScore = scoreMarketForMeanReversion(features);
         results.push(features);
@@ -674,8 +825,8 @@ function handleMessage(socket, data) {
     }
     latestTick = tick;
 
-    writeToClients(sseClients, tick);
-    writeToClients(directionClients, {
+    queueMainBroadcast(tick);
+    queueDirectionBroadcast({
         quote,
         trend,
         timestamp: tick.timestamp,
@@ -853,6 +1004,25 @@ const aiBroadcastTimer = setInterval(() => {
     writeToClients(aiClients, buildAIAnalysisPayload());
 }, 5000);
 
+function writeHeartbeat(clients) {
+    for (const client of clients) {
+        if (client.destroyed || client.writableEnded) {
+            clients.delete(client);
+            continue;
+        }
+        try {
+            client.write(': heartbeat\n\n');
+        } catch {
+            clients.delete(client);
+        }
+    }
+}
+
+const sseHeartbeatTimer = setInterval(() => {
+    writeHeartbeat(directionClients);
+    writeHeartbeat(sseClients);
+}, 15000);
+
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
 });
@@ -872,6 +1042,7 @@ function shutdown() {
     shuttingDown = true;
     clearInterval(keepAliveTimer);
     clearInterval(aiBroadcastTimer);
+    clearInterval(sseHeartbeatTimer);
     clearTimeout(reconnectTimer);
     for (const waiter of [...socketOpenWaiters]) {
         waiter.reject(new Error('Server is shutting down'));

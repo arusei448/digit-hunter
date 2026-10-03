@@ -209,6 +209,17 @@
     renderStream();
   }
 
+  let rafPending = false;
+  function scheduleRender() {
+    if (rafPending) return;
+    rafPending = true;
+    requestAnimationFrame(() => {
+      rafPending = false;
+      renderStream();
+      renderStats();
+    });
+  }
+
   async function loadInitial() {
     $("loading-state").hidden = false;
     $("loading-copy").textContent = "Loading recent tick history";
@@ -333,7 +344,7 @@
       if (allTicks.length > 1000) allTicks.shift();
       setConnection("live", "Live");
       clearError();
-      renderAll();
+      scheduleRender();
     };
     stream.onerror = () => {
       if (!lastReceivedAt) setConnection("offline", "Reconnecting");

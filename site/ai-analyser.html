@@ -80,6 +80,19 @@
     }
     .header h1 { margin: 0; color: #fff; font-size: 18px; font-weight: 700; }
     .header-sub { margin-top: 3px; color: var(--quiet); font-size: 12px; line-height: 1.4; }
+    .metric-guide {
+      padding: 10px 14px;
+      margin-bottom: 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #14161c;
+      color: var(--quiet);
+      font-size: 11px;
+      line-height: 1.8;
+    }
+    .metric-guide strong { margin-right: 6px; color: var(--muted); }
+    .metric-guide span { display: inline-block; }
+    .metric-guide b { color: var(--ink); font-weight: 600; }
     .live-badge {
       display: flex;
       flex: 0 0 auto;
@@ -175,6 +188,7 @@
       .nav-link { padding: 7px 6px; font-size: 11px; }
       .header { align-items: flex-start; padding: 12px; }
       .header-sub { max-width: 250px; font-size: 11px; }
+      .metric-guide { padding: 9px 11px; font-size: 10px; }
       .live-badge { padding: 6px 8px; font-size: 11px; }
       .strategy-bar { gap: 6px; padding: 10px; }
       .strategy-label { width: 100%; }
@@ -210,6 +224,17 @@
       <div class="live-badge" role="status"><span class="live-dot" aria-hidden="true"></span> Live</div>
     </header>
 
+    <aside class="metric-guide" aria-label="Metric definitions">
+      <strong>Metrics:</strong>
+      <span><b>R²</b> — trend strength (0–1)</span> ·
+      <span><b>Rise%</b> — up-tick ratio</span> ·
+      <span><b>RSI</b> — momentum (&gt;70 overbought, &lt;30 oversold)</span> ·
+      <span><b>Autocorr</b> — lag-1 correlation (positive = trending, negative = mean-reverting)</span> ·
+      <span><b>Hurst</b> — &gt;0.5 trending, &lt;0.5 mean-reverting</span> ·
+      <span><b>Velocity</b> — ticks per second</span> ·
+      <span><b>Pressure</b> — EMA-weighted price change</span>
+    </aside>
+
     <section class="strategy-bar" aria-label="Choose a scoring strategy">
       <span class="strategy-label">Strategy:</span>
       <button type="button" class="strategy-btn active" data-strategy="trend" aria-pressed="true">Trend-Following</button>
@@ -235,13 +260,15 @@
             <th scope="col">Score</th>
             <th scope="col" class="hide-mobile">R²</th>
             <th scope="col" class="hide-mobile">Rise %</th>
-            <th scope="col" class="hide-mobile">Vol</th>
+            <th scope="col" class="hide-mobile">RSI</th>
+            <th scope="col" class="hide-mobile">Autocorr</th>
             <th scope="col" class="hide-mobile">Hurst</th>
-            <th scope="col" class="hide-mobile">Streak</th>
+            <th scope="col" class="hide-mobile">Velocity</th>
+            <th scope="col" class="hide-mobile">Pressure</th>
           </tr>
         </thead>
         <tbody id="market-rows" aria-live="polite">
-          <tr><td colspan="9" style="text-align:center;color:#6b7280;padding:30px;">Waiting for data from all markets…</td></tr>
+          <tr><td colspan="11" style="text-align:center;color:#6b7280;padding:30px;">Waiting for data from all markets…</td></tr>
         </tbody>
       </table>
     </section>

@@ -38,25 +38,28 @@
     if (currentStrategy === "trend") {
       if (market.rSquared > 0.7) parts.push(`<strong>Strong trend strength</strong> (R² ${market.rSquared.toFixed(2)})`);
       else if (market.rSquared > 0.4) parts.push(`Moderate trend strength (R² ${market.rSquared.toFixed(2)})`);
-      else parts.push(`Weak directional bias (R² ${market.rSquared.toFixed(2)})`);
 
       if (market.riseFall.upPct > 60) parts.push(`${market.riseFall.upPct.toFixed(0)}% up-ticks`);
       else if (market.riseFall.upPct < 40) parts.push(`${(100 - market.riseFall.upPct).toFixed(0)}% down-ticks`);
-      else parts.push(`Balanced tick flow (${market.riseFall.upPct.toFixed(0)}% up)`);
 
-      if (market.hurst > 0.55) parts.push(`Hurst ${market.hurst.toFixed(2)} indicates trending behaviour in this sample`);
+      if (market.autocorrelation > 0.05) {
+        parts.push(`Positive autocorrelation (${market.autocorrelation.toFixed(3)}) describes persistent momentum`);
+      }
+      if (market.rsi > 60) parts.push(`RSI ${market.rsi.toFixed(0)} is elevated`);
+      else if (market.rsi < 40) parts.push(`RSI ${market.rsi.toFixed(0)} is subdued`);
     } else {
-      if (market.hurst < 0.45) parts.push(`Hurst ${market.hurst.toFixed(2)} suggests <strong>mean-reverting conditions</strong> in this sample`);
-      else parts.push(`Hurst ${market.hurst.toFixed(2)} — mixed conditions`);
-
+      if (market.hurst < 0.45) parts.push(`Hurst ${market.hurst.toFixed(2)} describes <strong>mean-reverting conditions</strong>`);
+      if (market.autocorrelation < -0.05) {
+        parts.push(`Negative autocorrelation (${market.autocorrelation.toFixed(3)}) describes reversal tendency`);
+      }
       if (market.digitDistribution.chiSq > 15) parts.push(`Notable digit skew (χ² ${market.digitDistribution.chiSq.toFixed(1)})`);
-      else parts.push(`Digit distribution near uniform (χ² ${market.digitDistribution.chiSq.toFixed(1)})`);
-
+      if (market.rsi > 70) parts.push(`RSI ${market.rsi.toFixed(0)} is overbought in this sample`);
+      else if (market.rsi < 30) parts.push(`RSI ${market.rsi.toFixed(0)} is oversold in this sample`);
       if (market.streak.currentStreak >= 4) {
         parts.push(`Current ${market.streak.currentStreak}-tick ${escapeHtml(market.streak.direction)} streak`);
       }
     }
-    return parts.join(" · ");
+    return parts.join(" · ") || "Analysing current conditions…";
   }
 
   function showEmptyState() {
@@ -64,7 +67,7 @@
     tpPrice.textContent = "Waiting for at least 20 ticks per market";
     tpScore.textContent = "—";
     tpRationale.textContent = "Scores describe the latest buffered conditions and are not predictions.";
-    marketRows.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#6b7280;padding:30px;">Waiting for data from all markets…</td></tr>';
+    marketRows.innerHTML = '<tr><td colspan="11" style="text-align:center;color:#6b7280;padding:30px;">Waiting for data from all markets…</td></tr>';
   }
 
   function render(data) {
@@ -100,6 +103,11 @@
       const score = Math.max(0, Math.min(100, market[scoreKey]));
       const risePct = market.riseFall.upPct;
       const riseClass = risePct > 50 ? "green" : risePct < 50 ? "red" : "";
+      const rsiClass = market.rsi > 70 ? "red" : market.rsi < 30 ? "green" : "";
+      const autoClass = market.autocorrelation > 0.05 ? "green"
+        : market.autocorrelation < -0.05 ? "red" : "";
+      const pressureClass = market.weightedPressure > 0 ? "green"
+        : market.weightedPressure < 0 ? "red" : "";
       row.innerHTML = `
         <td><span class="rank-badge ${rankClass}">${index + 1}</span></td>
         <td class="market-cell">${escapeHtml(market.name)}</td>
@@ -110,9 +118,11 @@
         </td>
         <td class="num-cell hide-mobile">${market.rSquared.toFixed(2)}</td>
         <td class="num-cell ${riseClass} hide-mobile">${risePct.toFixed(1)}%</td>
-        <td class="num-cell hide-mobile">${(market.volatility * 100).toFixed(2)}%</td>
+        <td class="num-cell ${rsiClass} hide-mobile">${market.rsi.toFixed(1)}</td>
+        <td class="num-cell ${autoClass} hide-mobile">${market.autocorrelation.toFixed(3)}</td>
         <td class="num-cell hide-mobile">${market.hurst.toFixed(2)}</td>
-        <td class="num-cell hide-mobile">${market.streak.currentStreak} ${escapeHtml(market.streak.direction)}</td>
+        <td class="num-cell hide-mobile">${market.tickVelocity.toFixed(1)}/s</td>
+        <td class="num-cell ${pressureClass} hide-mobile">${market.weightedPressure.toFixed(4)}</td>
       `;
       marketRows.appendChild(row);
     });
