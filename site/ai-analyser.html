@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0f1117">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231a1d24'/%3E%3Cpath d='M8 40h11l7-21 10 27 7-17h13' fill='none' stroke='%2354c8d5' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <title>AI Analyser — Deriv Analytics</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1117;
+      --panel: #1a1d24;
+      --panel-raised: #232730;
+      --line: #2a2e37;
+      --ink: #e8eaed;
+      --muted: #8892a0;
+      --quiet: #6b7280;
+      --blue: #4a9eff;
+      --green: #00c853;
+      --red: #ff5252;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      overflow-x: hidden;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    button, a { font: inherit; }
+    button:focus-visible, a:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+    .topnav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 16px;
+      background: #1a1d24;
+      border-bottom: 1px solid var(--line);
+    }
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .nav-logo { color: var(--blue); font-size: 18px; }
+    .nav-links { display: flex; gap: 8px; }
+    .nav-link {
+      padding: 8px 14px;
+      border-radius: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 500;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: background .15s ease, color .15s ease;
+    }
+    .nav-link:hover { background: var(--panel-raised); color: var(--ink); }
+    .nav-link.active { background: var(--blue); color: #fff; }
+    .app { width: 100%; max-width: 950px; margin: 0 auto; padding: 12px; font-size: 13px; }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 16px;
+      margin-bottom: 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+    }
+    .header h1 { margin: 0; color: #fff; font-size: 18px; font-weight: 700; }
+    .header-sub { margin-top: 3px; color: var(--quiet); font-size: 12px; line-height: 1.4; }
+    .live-badge {
+      display: flex;
+      flex: 0 0 auto;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      background: #122318;
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+    .strategy-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      margin-bottom: 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+    }
+    .strategy-label { margin-right: 4px; color: var(--muted); font-size: 12px; font-weight: 500; }
+    .strategy-btn {
+      padding: 8px 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: background .15s ease, border-color .15s ease, color .15s ease;
+    }
+    .strategy-btn:hover { border-color: var(--blue); color: var(--ink); }
+    .strategy-btn.active { border-color: var(--blue); background: var(--blue); color: #fff; }
+    .top-pick {
+      padding: 20px;
+      margin-bottom: 12px;
+      border: 2px solid var(--blue);
+      border-radius: 12px;
+      background: linear-gradient(135deg, #1a2a3f 0%, #122318 100%);
+      box-shadow: 0 0 24px rgba(74, 158, 255, .2);
+    }
+    .top-pick-label { margin-bottom: 8px; color: var(--blue); font-size: 11px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; }
+    .top-pick-market { margin-bottom: 4px; color: #fff; font-size: 24px; font-weight: 700; }
+    .top-pick-price { margin-bottom: 12px; color: var(--green); font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .top-pick-score {
+      display: inline-block;
+      padding: 4px 12px;
+      margin-bottom: 12px;
+      border-radius: 6px;
+      background: rgba(74, 158, 255, .2);
+      color: var(--blue);
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .top-pick-rationale { padding-top: 10px; border-top: 1px solid rgba(74, 158, 255, .2); color: var(--muted); font-size: 13px; line-height: 1.6; }
+    .top-pick-rationale strong { color: var(--ink); }
+    .table-card { overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+    .table-title { padding: 14px 16px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th { padding: 10px 14px; border-bottom: 1px solid var(--line); color: var(--quiet); font-size: 11px; font-weight: 600; letter-spacing: .4px; text-align: left; text-transform: uppercase; }
+    tbody td { padding: 12px 14px; border-bottom: 1px solid var(--panel-raised); color: var(--ink); font-size: 13px; }
+    tbody tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: var(--panel-raised); }
+    .rank-badge { display: inline-flex; width: 26px; height: 26px; align-items: center; justify-content: center; border-radius: 50%; background: var(--panel-raised); color: var(--muted); font-size: 12px; font-weight: 700; }
+    .rank-badge.top1 { background: var(--blue); color: #fff; }
+    .rank-badge.top2 { background: var(--green); color: #fff; }
+    .rank-badge.top3 { background: #ff9800; color: #fff; }
+    .market-cell { font-weight: 600; }
+    .score-cell { color: var(--blue); font-weight: 700; font-variant-numeric: tabular-nums; }
+    .score-bar { display: inline-block; width: 60px; height: 6px; overflow: hidden; margin-right: 8px; border-radius: 3px; background: var(--panel-raised); vertical-align: middle; }
+    .score-bar-fill { height: 100%; background: linear-gradient(90deg, var(--blue), var(--green)); transition: width .4s ease; }
+    .num-cell { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .num-cell.green { color: var(--green); }
+    .num-cell.red { color: var(--red); }
+    .disclaimer { padding: 12px 16px; margin-top: 12px; border: 1px solid var(--line); border-radius: 10px; background: #14161c; color: var(--quiet); font-size: 12px; line-height: 1.55; }
+    .disclaimer strong { color: var(--muted); }
+    @media (max-width: 860px) {
+      .app { max-width: 100%; padding: 8px; }
+      thead th, tbody td { padding: 8px 10px; }
+      .hide-mobile { display: none; }
+    }
+    @media (max-width: 520px) {
+      .topnav { padding: 9px 8px; }
+      .nav-brand { gap: 4px; font-size: 12px; }
+      .nav-logo { font-size: 15px; }
+      .nav-links { gap: 0; }
+      .nav-link { padding: 7px 6px; font-size: 11px; }
+      .header { align-items: flex-start; padding: 12px; }
+      .header-sub { max-width: 250px; font-size: 11px; }
+      .live-badge { padding: 6px 8px; font-size: 11px; }
+      .strategy-bar { gap: 6px; padding: 10px; }
+      .strategy-label { width: 100%; }
+      .strategy-btn { flex: 1; padding: 8px 9px; font-size: 12px; }
+      .top-pick { padding: 16px; }
+      .top-pick-market { font-size: 20px; }
+      .score-bar { width: 38px; margin-right: 5px; }
+      .table-title { padding: 12px; }
+      thead th, tbody td { padding: 8px 6px; font-size: 11px; }
+      .market-cell { max-width: 125px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="topnav" aria-label="Main navigation">
+    <div class="nav-brand"><span class="nav-logo" aria-hidden="true">◆</span> Deriv Analytics</div>
+    <div class="nav-links">
+      <a href="/" class="nav-link">Digits</a>
+      <a href="/risefall" class="nav-link">Rise &amp; Fall</a>
+      <a href="/ai-analyser" class="nav-link active" aria-current="page">AI Analyser</a>
+    </div>
+  </nav>
+
+  <main class="app">
+    <header class="header">
+      <div>
+        <h1>AI Market Analyser</h1>
+        <div class="header-sub">Descriptive scanner — ranks markets by current conditions, does not predict</div>
+      </div>
+      <div class="live-badge" role="status"><span class="live-dot" aria-hidden="true"></span> Live</div>
+    </header>
+
+    <section class="strategy-bar" aria-label="Choose a scoring strategy">
+      <span class="strategy-label">Strategy:</span>
+      <button type="button" class="strategy-btn active" data-strategy="trend" aria-pressed="true">Trend-Following</button>
+      <button type="button" class="strategy-btn" data-strategy="reversion" aria-pressed="false">Mean-Reversion</button>
+    </section>
+
+    <section class="top-pick" aria-live="polite">
+      <div class="top-pick-label" id="tp-label">Top Trend-Following Score</div>
+      <div class="top-pick-market" id="tp-market">Waiting for data…</div>
+      <div class="top-pick-price" id="tp-price">—</div>
+      <div class="top-pick-score" id="tp-score">—</div>
+      <div class="top-pick-rationale" id="tp-rationale">Analysis appears after each market has collected enough live ticks.</div>
+    </section>
+
+    <section class="table-card" aria-label="Ranked market analysis">
+      <div class="table-title" id="table-title">All Markets — Ranked by Trend-Following Score</div>
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">#</th>
+            <th scope="col">Market</th>
+            <th scope="col">Price</th>
+            <th scope="col">Score</th>
+            <th scope="col" class="hide-mobile">R²</th>
+            <th scope="col" class="hide-mobile">Rise %</th>
+            <th scope="col" class="hide-mobile">Vol</th>
+            <th scope="col" class="hide-mobile">Hurst</th>
+            <th scope="col" class="hide-mobile">Streak</th>
+          </tr>
+        </thead>
+        <tbody id="market-rows" aria-live="polite">
+          <tr><td colspan="9" style="text-align:center;color:#6b7280;padding:30px;">Waiting for data from all markets…</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <aside class="disclaimer">
+      <strong>Important:</strong> This analyser describes current market conditions. Deriv's volatility indices are generated by an audited RNG and are a memoryless random walk. No model can predict the next tick's direction better than chance. The scores above are heuristic rankings of statistical conditions — not probabilities. Trade with capital you can afford to lose.
+    </aside>
+  </main>
+  <script src="/ai-analyser.js"></script>
+</body>
+</html>

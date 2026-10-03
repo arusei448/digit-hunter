@@ -63,8 +63,10 @@ const MIME_TYPES = {
 const STATIC_FILES = new Map([
     ['/', 'index.html'],
     ['/risefall', 'risefall.html'],
+    ['/ai-analyser', 'ai-analyser.html'],
     ['/app.js', 'app.js'],
     ['/risefall.js', 'risefall.js'],
+    ['/ai-analyser.js', 'ai-analyser.js'],
 ]);
 
 function sendJson(res, statusCode, payload) {

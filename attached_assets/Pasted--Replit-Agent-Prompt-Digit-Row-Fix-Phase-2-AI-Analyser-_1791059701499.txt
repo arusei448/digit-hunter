@@ -1,0 +1,738 @@
+# Replit Agent Prompt — Digit Row Fix + Phase 2: AI Analyser Page
+
+Edit the existing **Deriv Analytics** project on Replit. Make ONLY the changes described below. Do NOT rebuild the project from scratch. Do NOT modify existing routes or logic unless explicitly stated.
+
+---
+
+## 📁 Files to Edit / Create
+
+- `site/index.html` (edit — digit row fix + nav bar)
+- `site/risefall.html` (edit — nav bar + AI Insight widget)
+- `site/risefall.js` (edit — AI Insight widget logic)
+- `index.js` (edit — add `/ai-analyser` route)
+- `site/ai-analyser.html` (**create** — new page)
+- `site/ai-analyser.js` (**create** — new page logic)
+
+---
+
+## PART 1 — Fix Digit Row Overflow
+
+**Problem:** On the Digits page, digits **8 and 9** are cut off because each circle has `min-width: 90px`, making the row wider than the container.
+
+### `site/index.html` — CSS changes
+
+Replace the current `.digit-circle` rule with:
+
+```css
+.digit-circle {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 78px;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: #232730;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 22px;
+    color: #e8eaed;
+    border: 3px solid #2a2e37;
+    transition: all 0.25s ease;
+}
+
+.digit-circle .digit-percent {
+    font-size: 11px;
+    font-weight: 600;
+    color: #8892a0;
+    margin-top: 2px;
+}
+```
+
+Replace `.digits-row` with:
+
+```css
+.digits-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+    flex-wrap: nowrap;
+    overflow: hidden;
+    width: 100%;
+}
+```
+
+Replace `.digit-label` with:
+
+```css
+.digit-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    margin-top: 4px;
+    text-transform: uppercase;
+    color: #6b7280;
+    white-space: nowrap;
+}
+```
+
+Reduce glow blur from `20px` to `14px` on active states:
+
+```css
+.digit-circle.latest {
+    border-color: #4a9eff;
+    background: #1a2a3f;
+    color: #4a9eff;
+    box-shadow: 0 0 14px rgba(74, 158, 255, 0.55);
+    transform: scale(1.04);
+}
+
+.digit-circle.hot {
+    border-color: #00c853;
+    background: #122318;
+    color: #00c853;
+    box-shadow: 0 0 14px rgba(0, 200, 83, 0.55);
+}
+
+.digit-circle.cold {
+    border-color: #ff5252;
+    background: #2a1215;
+    color: #ff5252;
+    box-shadow: 0 0 14px rgba(255, 82, 82, 0.55);
+}
+```
+
+---
+
+## PART 2 — Add "AI Analyser" to Navigation Bar (All Three Pages)
+
+### `site/index.html`, `site/risefall.html`, and the new `site/ai-analyser.html`
+
+Update the nav bar HTML in each file so the links become:
+
+```html
+<nav class="topnav">
+    <div class="nav-brand">
+        <span class="nav-logo">◆</span> Deriv Analytics
+    </div>
+    <div class="nav-links">
+        <a href="/" class="nav-link">Digits</a>
+        <a href="/risefall" class="nav-link">Rise &amp; Fall</a>
+        <a href="/ai-analyser" class="nav-link">AI Analyser</a>
+    </div>
+</nav>
+```
+
+Set the `active` class on the correct link per page:
+- `/` → `Digits` has `active`
+- `/risefall` → `Rise & Fall` has `active`
+- `/ai-analyser` → `AI Analyser` has `active`
+
+---
+
+## PART 3 — Add `/ai-analyser` Route to `index.js`
+
+Add this route **above** the static file serving block (the block that starts with `let filePath = req.url === '/' ? '/index.html' : req.url;`):
+
+```javascript
+if (req.url === '/ai-analyser') {
+    res.writeHead(200, { 'Content-Type': 'text/html' });
+    res.end(fs.readFileSync(path.join(__dirname, 'site', 'ai-analyser.html')));
+    return;
+}
+
+if (req.url === '/ai-analyser.js') {
+    res.writeHead(200, { 'Content-Type': 'application/javascript' });
+    res.end(fs.readFileSync(path.join(__dirname, 'site', 'ai-analyser.js')));
+    return;
+}
+```
+
+---
+
+## PART 4 — Create the AI Analyser Page
+
+### File: `site/ai-analyser.html`
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Analyser — Deriv Analytics</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f1117;
+            color: #e8eaed;
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+        .topnav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 16px;
+            background: #1a1d24;
+            border-bottom: 1px solid #2a2e37;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .nav-brand {
+            font-weight: 700;
+            font-size: 15px;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .nav-logo { color: #4a9eff; font-size: 18px; }
+        .nav-links { display: flex; gap: 8px; }
+        .nav-link {
+            color: #8892a0;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.15s;
+        }
+        .nav-link:hover { background: #232730; color: #e8eaed; }
+        .nav-link.active { background: #4a9eff; color: #fff; }
+
+        .app { max-width: 950px; margin: 0 auto; padding: 12px; font-size: 13px; }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: #1a1d24;
+            border: 1px solid #2a2e37;
+            border-radius: 10px;
+            margin-bottom: 12px;
+        }
+        .header h1 { font-size: 18px; font-weight: 700; color: #fff; }
+        .header-sub { font-size: 12px; color: #6b7280; margin-top: 2px; }
+        .live-badge {
+            display: flex; align-items: center; gap: 6px;
+            background: #122318; padding: 6px 12px;
+            border-radius: 20px; font-size: 12px; color: #00c853;
+            font-weight: 600;
+        }
+        .live-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: #00c853; animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse { 0%{opacity:1} 50%{opacity:0.3} 100%{opacity:1} }
+
+        /* Strategy selector */
+        .strategy-bar {
+            display: flex;
+            gap: 8px;
+            padding: 12px 16px;
+            background: #1a1d24;
+            border: 1px solid #2a2e37;
+            border-radius: 10px;
+            margin-bottom: 12px;
+            align-items: center;
+        }
+        .strategy-label { font-size: 12px; color: #8892a0; font-weight: 500; margin-right: 8px; }
+        .strategy-btn {
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: 1px solid #2a2e37;
+            background: #0f1117;
+            color: #8892a0;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .strategy-btn:hover { border-color: #4a9eff; color: #e8eaed; }
+        .strategy-btn.active { background: #4a9eff; color: #fff; border-color: #4a9eff; }
+
+        /* Top pick card */
+        .top-pick {
+            background: linear-gradient(135deg, #1a2a3f 0%, #122318 100%);
+            border: 2px solid #4a9eff;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 12px;
+            box-shadow: 0 0 24px rgba(74, 158, 255, 0.25);
+        }
+        .top-pick-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: #4a9eff;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .top-pick-market { font-size: 24px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+        .top-pick-price { font-size: 16px; color: #00c853; font-weight: 600; margin-bottom: 12px; }
+        .top-pick-score {
+            display: inline-block;
+            padding: 4px 12px;
+            background: rgba(74, 158, 255, 0.2);
+            border-radius: 6px;
+            color: #4a9eff;
+            font-weight: 700;
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+        .top-pick-rationale {
+            font-size: 13px;
+            color: #8892a0;
+            line-height: 1.6;
+            border-top: 1px solid rgba(74, 158, 255, 0.2);
+            padding-top: 10px;
+        }
+        .top-pick-rationale strong { color: #e8eaed; }
+
+        /* Markets table */
+        .table-card {
+            background: #1a1d24;
+            border: 1px solid #2a2e37;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .table-title {
+            padding: 14px 16px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #8892a0;
+            font-weight: 600;
+            border-bottom: 1px solid #2a2e37;
+        }
+        table { width: 100%; border-collapse: collapse; }
+        thead th {
+            text-align: left;
+            padding: 10px 14px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            color: #6b7280;
+            font-weight: 600;
+            border-bottom: 1px solid #2a2e37;
+        }
+        tbody td {
+            padding: 12px 14px;
+            font-size: 13px;
+            border-bottom: 1px solid #232730;
+            color: #e8eaed;
+        }
+        tbody tr:last-child td { border-bottom: none; }
+        tbody tr:hover { background: #232730; }
+        .rank-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: #232730;
+            font-weight: 700;
+            font-size: 12px;
+            color: #8892a0;
+        }
+        .rank-badge.top1 { background: #4a9eff; color: #fff; }
+        .rank-badge.top2 { background: #00c853; color: #fff; }
+        .rank-badge.top3 { background: #ff9800; color: #fff; }
+        .market-cell { font-weight: 600; }
+        .score-cell {
+            font-weight: 700;
+            color: #4a9eff;
+        }
+        .score-bar {
+            width: 60px;
+            height: 6px;
+            background: #232730;
+            border-radius: 3px;
+            overflow: hidden;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+        .score-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4a9eff, #00c853);
+            transition: width 0.4s ease;
+        }
+        .num-cell { font-variant-numeric: tabular-nums; color: #8892a0; }
+        .num-cell.green { color: #00c853; }
+        .num-cell.red { color: #ff5252; }
+
+        /* Disclaimer */
+        .disclaimer {
+            background: #14161c;
+            border: 1px solid #2a2e37;
+            border-radius: 10px;
+            padding: 12px 16px;
+            margin-top: 12px;
+            font-size: 12px;
+            color: #6b7280;
+            line-height: 1.5;
+        }
+        .disclaimer strong { color: #8892a0; }
+
+        @media (max-width: 860px) {
+            .app { max-width: 100%; padding: 8px; }
+            table { font-size: 12px; }
+            thead th, tbody td { padding: 8px 10px; }
+            .hide-mobile { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="topnav">
+        <div class="nav-brand"><span class="nav-logo">◆</span> Deriv Analytics</div>
+        <div class="nav-links">
+            <a href="/" class="nav-link">Digits</a>
+            <a href="/risefall" class="nav-link">Rise &amp; Fall</a>
+            <a href="/ai-analyser" class="nav-link active">AI Analyser</a>
+        </div>
+    </nav>
+
+    <div class="app">
+        <div class="header">
+            <div>
+                <h1>AI Market Analyser</h1>
+                <div class="header-sub">Descriptive scanner — ranks markets by current conditions, does not predict</div>
+            </div>
+            <div class="live-badge">
+                <span class="live-dot"></span> Live
+            </div>
+        </div>
+
+        <div class="strategy-bar">
+            <span class="strategy-label">Strategy:</span>
+            <button class="strategy-btn active" data-strategy="trend">Trend-Following</button>
+            <button class="strategy-btn" data-strategy="reversion">Mean-Reversion</button>
+        </div>
+
+        <div class="top-pick" id="top-pick">
+            <div class="top-pick-label">Top Pick</div>
+            <div class="top-pick-market" id="tp-market">Waiting for data…</div>
+            <div class="top-pick-price" id="tp-price">--</div>
+            <div class="top-pick-score" id="tp-score">--</div>
+            <div class="top-pick-rationale" id="tp-rationale">Analyser initialising. Data will appear once all markets have collected sufficient ticks.</div>
+        </div>
+
+        <div class="table-card">
+            <div class="table-title">All Markets — Ranked</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Market</th>
+                        <th>Price</th>
+                        <th>Score</th>
+                        <th class="hide-mobile">R²</th>
+                        <th class="hide-mobile">Rise %</th>
+                        <th class="hide-mobile">Vol</th>
+                        <th class="hide-mobile">Hurst</th>
+                        <th class="hide-mobile">Streak</th>
+                    </tr>
+                </thead>
+                <tbody id="market-rows">
+                    <tr><td colspan="9" style="text-align:center;color:#6b7280;padding:30px;">Waiting for data from all markets…</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="disclaimer">
+            <strong>Important:</strong> This analyser describes current market conditions. Deriv's volatility indices are generated by an audited RNG and are a memoryless random walk. No model can predict the next tick's direction better than chance. The scores above are heuristic rankings of statistical conditions — not probabilities. Trade with capital you can afford to lose.
+        </div>
+    </div>
+
+    <script src="/ai-analyser.js"></script>
+</body>
+</html>
+```
+
+---
+
+## PART 5 — AI Analyser Page Logic
+
+### File: `site/ai-analyser.js`
+
+```javascript
+// State
+let currentStrategy = 'trend';   // 'trend' or 'reversion'
+let latestAnalysis = null;
+
+// DOM
+const tpMarket = document.getElementById('tp-market');
+const tpPrice = document.getElementById('tp-price');
+const tpScore = document.getElementById('tp-score');
+const tpRationale = document.getElementById('tp-rationale');
+const marketRows = document.getElementById('market-rows');
+
+// ---------- Strategy toggle ----------
+document.querySelectorAll('.strategy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.strategy-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentStrategy = btn.dataset.strategy;
+        if (latestAnalysis) render(latestAnalysis);
+    });
+});
+
+// ---------- Rationale builder ----------
+function buildRationale(market) {
+    const parts = [];
+
+    if (currentStrategy === 'trend') {
+        if (market.rSquared > 0.7) parts.push(`<strong>Strong trend</strong> detected (R² ${market.rSquared.toFixed(2)})`);
+        else if (market.rSquared > 0.4) parts.push(`Moderate trend (R² ${market.rSquared.toFixed(2)})`);
+        else parts.push(`Weak directional bias (R² ${market.rSquared.toFixed(2)})`);
+
+        if (market.riseFall.upPct > 60) parts.push(`bullish momentum (${market.riseFall.upPct.toFixed(0)}% up-ticks)`);
+        else if (market.riseFall.upPct < 40) parts.push(`bearish momentum (${(100 - market.riseFall.upPct).toFixed(0)}% down-ticks)`);
+        else parts.push(`balanced tick flow (${market.riseFall.upPct.toFixed(0)}% up)`);
+
+        if (market.hurst > 0.55) parts.push(`Hurst ${market.hurst.toFixed(2)} indicates trending behaviour`);
+    } else {
+        if (market.hurst < 0.45) parts.push(`Hurst ${market.hurst.toFixed(2)} suggests <strong>mean-reverting</strong> behaviour`);
+        else parts.push(`Hurst ${market.hurst.toFixed(2)} — mixed regime`);
+
+        if (market.digitDistribution.chiSq > 15) parts.push(`notable digit skew (χ² ${market.digitDistribution.chiSq.toFixed(1)})`);
+        else parts.push(`digit distribution near uniform (χ² ${market.digitDistribution.chiSq.toFixed(1)})`);
+
+        if (market.streak.currentStreak >= 4) parts.push(`current ${market.streak.currentStreak}-tick ${market.streak.direction} streak`);
+    }
+
+    return parts.join(' · ');
+}
+
+// ---------- Rendering ----------
+function render(data) {
+    const markets = data.markets || [];
+    if (markets.length === 0) return;
+
+    // Sort by the current strategy
+    const key = currentStrategy === 'trend' ? 'trendScore' : 'reversionScore';
+    const sorted = markets.slice().sort((a, b) => b[key] - a[key]);
+
+    // Top pick
+    const top = sorted[0];
+    if (top) {
+        tpMarket.textContent = top.name;
+        tpPrice.textContent = `${top.currentPrice.toFixed(2)}  ·  ${top.tickCount} ticks analysed`;
+        tpScore.textContent = `Score: ${top[key]} / 100`;
+        tpRationale.innerHTML = buildRationale(top);
+    }
+
+    // Table
+    marketRows.innerHTML = '';
+    sorted.forEach((m, i) => {
+        const tr = document.createElement('tr');
+
+        let rankClass = '';
+        if (i === 0) rankClass = 'top1';
+        else if (i === 1) rankClass = 'top2';
+        else if (i === 2) rankClass = 'top3';
+
+        const score = m[key];
+        const risePct = m.riseFall.upPct;
+        const riseClass = risePct > 50 ? 'green' : risePct < 50 ? 'red' : '';
+
+        tr.innerHTML = `
+            <td><span class="rank-badge ${rankClass}">${i + 1}</span></td>
+            <td class="market-cell">${m.name}</td>
+            <td class="num-cell">${m.currentPrice.toFixed(2)}</td>
+            <td>
+                <span class="score-bar"><span class="score-bar-fill" style="width:${score}%"></span></span>
+                <span class="score-cell">${score}</span>
+            </td>
+            <td class="num-cell hide-mobile">${m.rSquared.toFixed(2)}</td>
+            <td class="num-cell ${riseClass} hide-mobile">${risePct.toFixed(1)}%</td>
+            <td class="num-cell hide-mobile">${(m.volatility * 100).toFixed(2)}%</td>
+            <td class="num-cell hide-mobile">${m.hurst.toFixed(2)}</td>
+            <td class="num-cell hide-mobile">${m.streak.currentStreak} ${m.streak.direction}</td>
+        `;
+        marketRows.appendChild(tr);
+    });
+}
+
+// ---------- SSE connection ----------
+const eventSource = new EventSource('/stream/ai');
+
+eventSource.onmessage = (event) => {
+    latestAnalysis = JSON.parse(event.data);
+    render(latestAnalysis);
+};
+
+eventSource.onerror = () => {
+    // Keep trying — SSE auto-reconnects
+};
+```
+
+---
+
+## PART 6 — Add "AI Insight" Widget to the Rise & Fall Page
+
+### `site/risefall.html` — Insert this HTML
+
+Place this block **after** the `.controls` div and **before** the `.stats-grid` div:
+
+```html
+<div class="ai-insight" id="ai-insight">
+    <div class="ai-insight-header">
+        <span class="ai-insight-icon">◆</span>
+        <span class="ai-insight-title">AI Insight</span>
+        <span class="ai-insight-score" id="ai-insight-score">--</span>
+    </div>
+    <div class="ai-insight-body">
+        <span class="ai-insight-market" id="ai-insight-market">Analysing markets…</span>
+        <span class="ai-insight-note" id="ai-insight-note">Top trend-following candidate based on current conditions.</span>
+    </div>
+    <a href="/ai-analyser" class="ai-insight-link">View full analysis →</a>
+</div>
+```
+
+### `site/risefall.html` — Add this CSS
+
+Add these rules just before the closing `</style>` tag:
+
+```css
+.ai-insight {
+    background: linear-gradient(135deg, #1a2a3f 0%, #122318 100%);
+    border: 1px solid #4a9eff;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ai-insight-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ai-insight-icon { color: #4a9eff; font-size: 14px; }
+.ai-insight-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: #4a9eff;
+    font-weight: 700;
+    flex: 1;
+}
+.ai-insight-score {
+    background: rgba(74, 158, 255, 0.2);
+    color: #4a9eff;
+    padding: 2px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.ai-insight-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.ai-insight-market { font-size: 15px; font-weight: 700; color: #fff; }
+.ai-insight-note { font-size: 12px; color: #8892a0; }
+
+.ai-insight-link {
+    align-self: flex-start;
+    font-size: 12px;
+    color: #4a9eff;
+    text-decoration: none;
+    font-weight: 600;
+    margin-top: 4px;
+}
+.ai-insight-link:hover { text-decoration: underline; }
+```
+
+### `site/risefall.js` — Add AI Insight logic
+
+Add this at the bottom of the file, after the existing SSE setup:
+
+```javascript
+// ---------- AI Insight widget ----------
+const aiInsightMarket = document.getElementById('ai-insight-market');
+const aiInsightScore = document.getElementById('ai-insight-score');
+const aiInsightNote = document.getElementById('ai-insight-note');
+
+const aiEventSource = new EventSource('/stream/ai');
+
+aiEventSource.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    const markets = data.markets || [];
+    if (markets.length === 0) return;
+
+    // Rank by trend-following score (default for this widget)
+    const sorted = markets.slice().sort((a, b) => b.trendScore - a.trendScore);
+    const top = sorted[0];
+
+    aiInsightMarket.textContent = top.name;
+    aiInsightScore.textContent = `${top.trendScore} / 100`;
+
+    const parts = [];
+    if (top.rSquared > 0.7) parts.push(`R² ${top.rSquared.toFixed(2)}`);
+    if (top.riseFall.upPct > 60) parts.push(`${top.riseFall.upPct.toFixed(0)}% up`);
+    else if (top.riseFall.upPct < 40) parts.push(`${(100 - top.riseFall.upPct).toFixed(0)}% down`);
+
+    aiInsightNote.textContent = parts.length > 0
+        ? `Top trend candidate · ${parts.join(' · ')}`
+        : 'Top trend-following candidate based on current conditions.';
+};
+```
+
+---
+
+## ✅ Verification Checklist
+
+- [ ] All 10 digits (0–9) fit in one row on the Digits page — no digits cut off
+- [ ] Percentages and LATEST / MOST / LEAST labels still visible
+- [ ] Nav bar on all three pages shows **Digits | Rise & Fall | AI Analyser**
+- [ ] Active nav link highlights correctly per page
+- [ ] `/ai-analyser` loads with no console errors
+- [ ] Strategy toggle switches between Trend-Following and Mean-Reversion scoring
+- [ ] Top Pick card shows the #1 market for the selected strategy
+- [ ] Table shows all 10 markets ranked by score
+- [ ] Score bars render inside each row
+- [ ] Rise % displays green when above 50%, red when below
+- [ ] AI Insight widget appears on the Rise & Fall page above the stats grid
+- [ ] AI Insight updates every 5 seconds via `/stream/ai`
+- [ ] "View full analysis →" link navigates to `/ai-analyser`
+- [ ] Disclaimer banner visible at the bottom of the AI Analyser page
+- [ ] No regressions to existing Digits / Rise & Fall functionality
+- [ ] No regressions to anti-popping, market switching, or digit-0 detection
+
+## ⚠️ Do Not Change
+
+- The Phase 1 backend logic in `index.js`: `analyzeAllMarkets()`, `marketBuffers`, scoring functions
+- The existing `/stream/ai` SSE endpoint
+- The digit-0 extraction logic
+- The `initDigitElements()` and `initStreamBars()` functions
+- The `/switch`, `/history`, `/history/direction`, `/stream`, `/stream/direction` endpoints
+- The public WebSocket URL
+- The 65% momentum threshold on the Rise & Fall page
+- The market list
+
+---
+
+## 📸 After the build — what to test
+
+1. Restart Replit
+2. Open `/` — confirm all 10 digits fit in one row
+3. Open `/risefall` — confirm the AI Insight widget appears above the stats grid and updates
+4. Open `/ai-analyser` — confirm the ranked table, top pick card, and strategy toggle all work
+5. Click **Mean-Reversion** on the AI Analyser — confirm the rankings reshuffle
+6. Click **View full analysis →** on the Rise & Fall page — confirm it navigates to `/ai-analyser`
+
+Share screenshots of all three pages. Once confirmed, we move to **Phase 3** — configurable score weights, per-market trend sparklines, or whatever refinement you want next.

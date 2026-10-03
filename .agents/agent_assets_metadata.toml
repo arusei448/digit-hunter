@@ -14,3 +14,59 @@ mtime_ms = 1791058754052
 storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:7fb43c5c-3b4d-4732-963e-481e39ed6ce6/6d9db921-1ff9-409b-913d-fb762d9c967d/4a6d4034-7731-4ac1-8bd7-7c15c515548d"
 storage_version_token = "1791058774687425"
 content_type = "image/jpeg"
+
+[[outputs]]
+id = "ydqkhT_WxIuxglP83xvkg"
+uri = "file://screenshots/phase2-digits-desktop.jpg"
+type = "image"
+title = "Digits page — desktop"
+description = "Desktop verification showing the complete 0–9 digit row and updated navigation."
+logical_id = "d9092190-7ebd-42c3-be1e-45a2d39152db"
+content_hash = "sha256:0d26d022d878a23ee5ccb3e059942a587006c50de6946e51f080f8ab1a150531"
+size = 75391
+mtime_ms = 1791060228916
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:7fb43c5c-3b4d-4732-963e-481e39ed6ce6/d9092190-7ebd-42c3-be1e-45a2d39152db/44f1d54f-e7ac-42e6-bbfe-67fb3cfcaa46"
+storage_version_token = "1791060255534643"
+content_type = "image/jpeg"
+
+[[outputs]]
+id = "4NVU3kXuWLIFpHlL5gVOK"
+uri = "file://screenshots/phase2-digits-mobile.jpg"
+type = "image"
+title = "Digits page — mobile"
+description = "Full-page mobile verification showing all ten digits and their labels in one row."
+logical_id = "9f62fd6c-51d8-4367-b646-e5819ae3216c"
+content_hash = "sha256:fcfc9127135a5f1a8d99fcc00112c84e5045244c019e475af62a47d6beb77c7f"
+size = 60031
+mtime_ms = 1791060232888
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:7fb43c5c-3b4d-4732-963e-481e39ed6ce6/9f62fd6c-51d8-4367-b646-e5819ae3216c/915f302b-338a-4ef7-965b-edb6d95536af"
+storage_version_token = "1791060256146050"
+content_type = "image/jpeg"
+
+[[outputs]]
+id = "Z6zjTd9VZarM4Fo4nPQ0n"
+uri = "file://screenshots/phase2-risefall.jpg"
+type = "image"
+title = "Rise & Fall page"
+description = "Verification showing the live AI Insight widget above the existing statistics."
+logical_id = "68279070-1894-4ea7-83fb-31db5b740420"
+content_hash = "sha256:b080018c80a7b5ca1f1e9de659a103f8db2219ccb79581e59239d7005a7cfb49"
+size = 73757
+mtime_ms = 1791060237136
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:7fb43c5c-3b4d-4732-963e-481e39ed6ce6/68279070-1894-4ea7-83fb-31db5b740420/2905495d-7b27-47e2-8123-7d12d25bd253"
+storage_version_token = "1791060256651472"
+content_type = "image/jpeg"
+
+[[outputs]]
+id = "3JeOo96EUSLSrkvakaRrx"
+uri = "file://screenshots/phase2-ai-analyser.jpg"
+type = "image"
+title = "AI Analyser page"
+description = "Live ranked market table, strategy selector, score bars, and descriptive disclaimer."
+logical_id = "aebe2e6c-0e92-48e6-8c56-6ab834d02f79"
+content_hash = "sha256:2d5fbabef80df60c4babd52c0606515871722d159c797ebc3c4bd3df927e8af2"
+size = 107594
+mtime_ms = 1791060241744
+storage_uri = "gcs://replit-rams-assets-janeway/rams/assets/repl:7fb43c5c-3b4d-4732-963e-481e39ed6ce6/aebe2e6c-0e92-48e6-8c56-6ab834d02f79/7af7212c-c4e0-4fe6-be5d-0c8580ae77ba"
+storage_version_token = "1791060257118020"
+content_type = "image/jpeg"

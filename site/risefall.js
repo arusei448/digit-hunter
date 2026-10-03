@@ -366,4 +366,39 @@
     if (age > 7000) setConnection("stale", "Stale stream");
     else setConnection(lastReceivedAt ? "live" : "", lastReceivedAt ? "Live" : "Waiting for tick");
   }, 1000);
+
+  // ---------- AI Insight widget ----------
+  const aiInsightMarket = $("ai-insight-market");
+  const aiInsightScore = $("ai-insight-score");
+  const aiInsightNote = $("ai-insight-note");
+  let lastAiTimestamp = 0;
+  function renderAiInsight(data) {
+    if (!data) return;
+    const timestamp = Number(data.timestamp) || Date.now();
+    if (timestamp < lastAiTimestamp) return;
+    const markets = Array.isArray(data.markets) ? data.markets : [];
+    if (markets.length === 0) return;
+    lastAiTimestamp = timestamp;
+    const top = markets.slice().sort((a, b) => b.trendScore - a.trendScore)[0];
+    if (!top) return;
+    aiInsightMarket.textContent = top.name;
+    aiInsightScore.textContent = `${top.trendScore} / 100`;
+    const parts = [];
+    if (top.rSquared > 0.7) parts.push(`R² ${top.rSquared.toFixed(2)}`);
+    if (top.riseFall.upPct > 60) parts.push(`${top.riseFall.upPct.toFixed(0)}% up`);
+    else if (top.riseFall.upPct < 40) parts.push(`${(100 - top.riseFall.upPct).toFixed(0)}% down`);
+
+    aiInsightNote.textContent = parts.length > 0
+      ? `Highest trend-following score · ${parts.join(" · ")}`
+      : "Highest trend-following score from current conditions.";
+  }
+
+  const aiEventSource = new EventSource("/stream/ai");
+  aiEventSource.onmessage = (event) => {
+    try { renderAiInsight(JSON.parse(event.data)); } catch { return; }
+  };
+  fetch("/ai-analysis", { headers: { Accept: "application/json" } })
+    .then((response) => response.ok ? response.json() : null)
+    .then(renderAiInsight)
+    .catch(() => {});
 })();
