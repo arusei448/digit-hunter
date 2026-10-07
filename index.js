@@ -77,6 +77,7 @@ function sendJson(res, statusCode, payload) {
     res.writeHead(statusCode, {
         'Content-Type': 'application/json; charset=utf-8',
         'Cache-Control': 'no-store',
+        'Access-Control-Allow-Origin': '*',
     });
     res.end(JSON.stringify(payload));
 }
@@ -303,11 +304,10 @@ function sendToSocket(socket, payload) {
 
 function subscribeAllMarkets(socket) {
     liveMarketSymbolsSeen.clear();
-    for (const symbol of ALL_MARKETS) {
-        if (symbol === connectedSymbol) continue;
-        sendToSocket(socket, { ticks: symbol, subscribe: 1 });
-    }
-    console.log(`Subscribed to tick streams for ${ALL_MARKETS.length} markets`);
+    const symbols = ALL_MARKETS.filter((symbol) => symbol !== connectedSymbol);
+    if (symbols.length === 0) return;
+    sendToSocket(socket, { ticks: symbols, subscribe: 1 });
+    console.log(`Subscribed to tick streams for ${symbols.length} markets`);
 }
 
 function waitForSocketOpen(timeoutMs = 30000) {
@@ -360,6 +360,16 @@ function requestHistory(symbol, socket) {
     });
 }
 
+async function requestHistoryOrFallback(symbol, socket, fallbackTicks) {
+    try {
+        return await requestHistory(symbol, socket);
+    } catch (error) {
+        if (socket !== ws || socket.readyState !== WebSocket.OPEN) throw error;
+        console.warn(`History unavailable for ${symbol}; continuing with ${fallbackTicks.length} cached ticks: ${error.message}`);
+        return fallbackTicks;
+    }
+}
+
 function rejectPendingHistory(socket, error) {
     for (const [reqId, pending] of pendingHistory) {
         if (pending.socket !== socket) continue;
@@ -379,7 +389,9 @@ function enqueueMarketOperation(operation) {
 
 async function activateCurrentMarket(socket) {
     const symbol = currentSymbol;
-    const ticks = await requestHistory(symbol, socket);
+    const ticks = historyLoaded
+        ? historicalTicks
+        : await requestHistoryOrFallback(symbol, socket, historicalTicks);
     if (socket !== ws || socket.readyState !== WebSocket.OPEN) return;
     installHistory(symbol, ticks);
     seedMarketBuffer(symbol, ticks);
@@ -408,7 +420,7 @@ function switchMarket(symbol) {
         sendToSocket(socket, { forget_all: 'ticks' });
         connectedSymbol = null;
         try {
-            const ticks = await requestHistory(symbol, socket);
+            const ticks = await requestHistoryOrFallback(symbol, socket, []);
             if (socket !== ws || socket.readyState !== WebSocket.OPEN) {
                 throw new Error('Deriv connection closed while changing markets');
             }
@@ -781,6 +793,17 @@ function handleMessage(socket, data) {
         return;
     }
 
+    if (msg.error) {
+        const request = msg.echo_req || {};
+        console.error(`Deriv ${request.ticks_history ? 'history' : 'tick-stream'} request failed: ${msg.error.message || 'Unknown API error'}`);
+        if ((request.ticks !== undefined || request.ticks_history !== undefined)
+            && socket === ws
+            && socket.readyState === WebSocket.OPEN) {
+            socket.close(1013, 'Deriv API request rejected');
+        }
+        return;
+    }
+
     if (!msg.tick || msg.tick.quote === undefined || msg.tick.quote === null) return;
     const symbol = msg.tick.symbol || connectedSymbol;
     if (!symbol) return;
@@ -792,6 +815,7 @@ function handleMessage(socket, data) {
     const price = numericQuote(quote);
     const digit = digitFromRawQuote(quote);
     if (price === null || digit === null) return;
+    reconnectDelay = 1000;
 
     const timestamp = Number(msg.tick.epoch) || Math.floor(Date.now() / 1000);
     if (marketBuffers[symbol]) {
@@ -859,7 +883,6 @@ function connectToDeriv() {
 
     socket.on('open', () => {
         if (socket !== ws) return;
-        reconnectDelay = 1000;
         console.log('Connected to Deriv public WebSocket');
         for (const waiter of [...socketOpenWaiters]) waiter.resolve(socket);
         enqueueMarketOperation(() => activateCurrentMarket(socket)).catch((error) => {
@@ -907,6 +930,7 @@ const server = http.createServer(async (req, res) => {
             'Cache-Control': 'no-cache, no-transform',
             Connection: 'keep-alive',
             'X-Accel-Buffering': 'no',
+            'Access-Control-Allow-Origin': '*',
         });
         res.write(': connected\n\n');
         clients.add(res);
@@ -920,6 +944,7 @@ const server = http.createServer(async (req, res) => {
             'Cache-Control': 'no-cache, no-transform',
             Connection: 'keep-alive',
             'X-Accel-Buffering': 'no',
+            'Access-Control-Allow-Origin': '*',
         });
         res.write(': connected\n\n');
         aiClients.add(res);
@@ -1036,7 +1061,7 @@ const sseHeartbeatTimer = setInterval(() => {
 }, 15000);
 
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`Server running on 0.0.0.0:${PORT}`);
 });
 
 const keepAliveTimer = setInterval(() => {
@@ -1047,7 +1072,7 @@ const keepAliveTimer = setInterval(() => {
             console.error('Deriv keep-alive failed:', error.message);
         }
     }
-}, 30000);
+}, 25000);
 
 function shutdown() {
     if (shuttingDown) return;

@@ -1,0 +1,356 @@
+Replit Agent Prompt — Fix Published Site: Ticks Not Loading, Performance, Accuracy & Stream Smoothness
+Edit the existing Deriv Analytics project. Apply ALL fixes below. Do NOT rebuild from scratch. Do NOT modify files not listed.
+
+📁 Files to Edit
+.replit
+
+index.js
+
+site/risefall.js
+
+site/risefall.html
+
+site/app.js
+
+site/index.html
+
+FIX 1 — Bind Server to 0.0.0.0 and Configure .replit
+.replit
+Open the .replit file. Replace the [run] and [http] sections with:
+
+text
+[run]
+command = "node index.js"
+
+[http]
+onPort = 3000
+port = 3000
+
+[env]
+NODE_ENV = "production"
+index.js
+Find the server.listen() call at the bottom. Replace it with:
+
+javascript
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on 0.0.0.0:${PORT}`);
+});
+Why: Replit Deployments route external traffic to the container directly. A server bound only to localhost refuses outside connections.
+
+FIX 2 — Add SSE Production Headers (Critical — Fixes "No Ticks")
+index.js
+Find every SSE endpoint (/stream, /stream/direction, /stream/ai). For each res.writeHead(200, {...}) block, ensure the headers include:
+
+javascript
+res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+    'Access-Control-Allow-Origin': '*'
+});
+The two critical additions are:
+
+'X-Accel-Buffering': 'no' — tells Replit's Nginx proxy not to buffer SSE responses
+
+'no-transform' in Cache-Control — prevents compression middleware from breaking chunked delivery
+
+Why: Nginx buffers responses by default. Without X-Accel-Buffering: no, SSE events are delayed until ~16KB accumulates — which may never happen for low-frequency tick streams.
+
+FIX 3 — Add WebSocket Keep-Alive Pings to Deriv
+index.js
+Add this interval alongside the other setInterval calls near the bottom:
+
+javascript
+// Ping Deriv every 25 seconds to keep the connection alive
+setInterval(() => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ ping: 1 }));
+    }
+}, 25000);
+Why: Deriv closes idle WebSocket connections after 30 seconds. Without a ping, the connection dies silently and your backend never receives ticks.
+
+FIX 4 — Add SSE Heartbeat (Prevents Connection Drops in Production)
+index.js
+Add this near the other intervals:
+
+javascript
+setInterval(() => {
+    const heartbeat = ': heartbeat\n\n';
+    for (const client of sseClients) {
+        try { client.write(heartbeat); } catch (e) { sseClients.delete(client); }
+    }
+    for (const client of directionClients) {
+        try { client.write(heartbeat); } catch (e) { directionClients.delete(client); }
+    }
+    for (const client of aiClients) {
+        try { client.write(heartbeat); } catch (e) { aiClients.delete(client); }
+    }
+}, 30000);
+Why: Replit's reverse proxy kills idle connections after ~100 seconds. The : prefix is an SSE comment the browser ignores, but it keeps the TCP connection warm.
+
+FIX 5 — WebSocket Reconnection with Exponential Backoff
+index.js
+Replace the WebSocket connection block (const ws = new WebSocket(WS_URL) and all its handlers) with:
+
+javascript
+let ws = null;
+let reconnectAttempt = 0;
+const MAX_RECONNECT_DELAY = 30000;
+let currentSubscriptions = [];
+let reqIdCounter = 1;
+
+function connectWebSocket() {
+    ws = new WebSocket(WS_URL);
+
+    ws.on('open', () => {
+        console.log('Connected to Deriv public gateway');
+        reconnectAttempt = 0;
+
+        // Re-subscribe to all active markets after reconnect
+        currentSubscriptions.forEach(sub => {
+            ws.send(JSON.stringify(sub));
+        });
+
+        // Fetch initial history for current symbol
+        fetchHistory(currentSymbol).then(ticks => {
+            historicalTicks = ticks;
+            console.log(`Loaded ${ticks.length} initial ticks for ${currentSymbol}`);
+        });
+
+        // Subscribe to current symbol
+        const sub = { ticks: currentSymbol, subscribe: 1 };
+        currentSubscriptions.push(sub);
+        ws.send(JSON.stringify(sub));
+    });
+
+    ws.on('message', (data) => {
+        // ... existing message handler logic stays here ...
+    });
+
+    ws.on('error', (err) => console.log('WS Error:', err.message));
+
+    ws.on('close', () => {
+        console.log('WS closed — reconnecting...');
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempt), MAX_RECONNECT_DELAY);
+        reconnectAttempt++;
+        console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttempt})`);
+        setTimeout(connectWebSocket, delay);
+    });
+}
+
+connectWebSocket();
+Why: Replit deployments get a fresh outbound IP on every restart. Transient network issues can drop the Deriv connection. Exponential backoff ensures automatic recovery.
+
+FIX 6 — Configure HTTP Server Timeouts
+index.js
+Add these before server.listen():
+
+javascript
+server.keepAliveTimeout = 65000;
+server.headersTimeout = 66000;
+server.timeout = 0;
+Why: Node.js defaults to a 5-second keep-alive and 60-second header timeout. These kill SSE connections between ticks. timeout = 0 disables socket timeouts for long-lived streams.
+
+FIX 7 — Rise & Fall: Never Round Prices
+site/risefall.js
+Find the eventSource.onmessage handler. Replace it with:
+
+javascript
+eventSource.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    const { quote, trend, timestamp, tickId, pipSize } = data;
+
+    if (!quote) return;
+    lastReceivedAt = Date.now();
+
+    if (typeof pipSize === 'number' && pipSize > 0) {
+        currentPipSize = pipSize;
+    }
+
+    // Preserve full precision — quote is a STRING
+    const quoteStr = quote.toString();
+    const quoteNum = parseFloat(quoteStr);
+
+    // Display with correct decimals
+    priceEl.textContent = quoteNum.toFixed(currentPipSize);
+
+    // Extract digit from RAW string (fixes the 0 bug)
+    const lastDigit = parseInt(quoteStr.slice(-1));
+    if (!isNaN(lastDigit)) {
+        digitBadge.textContent = lastDigit;
+    }
+
+    // Deduplicate — skip if same tick repeats
+    if (tickId && tickId === lastTickId) return;
+    lastTickId = tickId;
+
+    allTicks.push({
+        quote: quoteNum,
+        trend: trend,
+        timestamp: timestamp,
+        tickId: tickId
+    });
+
+    if (allTicks.length > 1000) allTicks.shift();
+
+    scheduleRender();
+};
+Add these state variables near the top of site/risefall.js:
+
+javascript
+let lastTickId = null;
+let currentPipSize = 4;
+FIX 8 — Smooth Stream: requestAnimationFrame
+site/risefall.js
+Add this near the top of the file:
+
+javascript
+let rafPending = false;
+
+function scheduleRender() {
+    if (rafPending) return;
+    rafPending = true;
+    requestAnimationFrame(() => {
+        rafPending = false;
+        renderStream();
+        renderStats();
+    });
+}
+Replace every direct call to renderAll() in the SSE handler and market switch handler with scheduleRender().
+
+site/risefall.html
+Update the .stream-bar CSS:
+
+css
+.stream-bar {
+    flex: 1;
+    border-radius: 3px 3px 0 0;
+    transition: height 120ms linear, background 120ms linear;
+    min-height: 6px;
+    will-change: height;
+}
+Add to .stream-bars:
+
+css
+.stream-bars {
+    contain: layout paint;
+}
+Why: requestAnimationFrame syncs updates to the browser's paint cycle. contain: layout paint isolates the stream container so its layout doesn't trigger full-page recalculations.
+
+FIX 9 — Market Switch Race Condition
+index.js
+Replace the /switch handler with:
+
+javascript
+if (req.url.startsWith('/switch')) {
+    const url = new URL(req.url, `http://localhost:${PORT}`);
+    const newSymbol = url.searchParams.get('symbol');
+
+    if (!newSymbol || !MARKETS[newSymbol]) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid symbol' }));
+        return;
+    }
+
+    // 1. Unsubscribe from existing streams
+    ws.send(JSON.stringify({ forget_all: 'ticks' }));
+
+    // 2. Reset state
+    currentSymbol = newSymbol;
+    previousQuote = null;
+    latestTick = null;
+    historicalTicks = [];
+
+    // 3. Allow forget_all to settle
+    await new Promise(r => setTimeout(r, 200));
+
+    // 4. Fetch history with req_id correlation
+    const ticks = await fetchHistory(newSymbol);
+    historicalTicks = ticks;
+
+    // 5. Subscribe to live ticks
+    ws.send(JSON.stringify({ ticks: newSymbol, subscribe: 1 }));
+
+    console.log(`Switched to ${newSymbol} — ${ticks.length} history ticks`);
+
+    // 6. Return history directly to the client
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+        symbol: currentSymbol,
+        history: ticks.slice(-1000)
+    }));
+    return;
+}
+index.js
+Replace the fetchHistory function with:
+
+javascript
+let reqIdCounter = 1;
+
+function fetchHistory(symbol) {
+    return new Promise((resolve) => {
+        const reqId = reqIdCounter++;
+        historyResolvers.push({ reqId, resolve });
+
+        ws.send(JSON.stringify({
+            ticks_history: symbol,
+            end: 'latest',
+            start: 0,
+            style: 'ticks',
+            count: 1000,
+            subscribe: 0,
+            req_id: reqId
+        }));
+    });
+}
+Change historyResolvers from an array of functions to an array of { reqId, resolve } objects. Update the history message handler to find by req_id.
+
+FIX 10 — Pass tickId and pipSize in SSE Payloads
+index.js
+In the tick handler inside ws.on('message'), ensure the direction SSE payload includes:
+
+javascript
+const directionPayload = `data: ${JSON.stringify({
+    quote: quoteRaw,
+    trend: trend,
+    timestamp: latestTick.timestamp,
+    symbol: currentSymbol,
+    tickId: msg.tick.id || null,
+    pipSize: msg.tick.pip_size || null
+})}\n\n`;
+for (const client of directionClients) {
+    try { client.write(directionPayload); } catch (e) { directionClients.delete(client); }
+}
+Why: Deriv's tick response includes an id field (per-connection unique identifier) and a pip_size field (display precision). Without these, the frontend cannot deduplicate or display correctly.
+
+✅ Verification Checklist
+After all fixes, test in both Preview and the deployed URL:
+
+□ Deployed site: Live ticks appear within 3 seconds of page load
+□ Deployed site: SSE streams deliver ticks in real time (no batch delays)
+□ Deployed site: Connection stays alive for 10+ minutes
+□ Accuracy: Price shows correct decimals (4 for volatility indices)
+□ Accuracy: Digit badge matches last character of displayed price
+□ Accuracy: Rise/Fall counts are consistent — no false "flat" classifications
+□ Accuracy: Market switch loads history instantly without duplicating the first tick
+□ Smoothness: Stream bars update smoothly — no flashing or popping
+□ Reliability: WebSocket auto-reconnects after network drop
+□ Performance: Page responds within 2 seconds of first load
+□ No regressions: Digits dashboard, AI Analyser, and nav all still work
+⚠️ Do Not Change
+The public WebSocket URL: wss://api.derivws.com/trading/v1/options/ws/public
+
+The market list
+
+The dark theme
+
+The nav bar
+
+The initStreamBars() and initDigitElements() functions
+
+The 65% momentum threshold
+
+The digit-0 extraction logic (parseInt(quoteStr.slice(-1)))
+
+The AI analyser backend logic

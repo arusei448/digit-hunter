@@ -264,7 +264,7 @@
     $("loading-state").hidden = false;
     $("loading-copy").textContent = "Switching market and loading fresh history";
     setConnection("", "Switching market");
-    renderAll();
+    scheduleRender();
     try {
       const switched = await requestJson(`/switch?symbol=${encodeURIComponent(symbol)}`);
       if (!switched.symbol || switched.symbol !== symbol) throw new Error("Market switch was not confirmed by the data service.");
@@ -275,7 +275,7 @@
       const latest = allTicks[allTicks.length - 1];
       if (latest) updatePrice(latest);
       $("market-symbol").textContent = `${symbol} · exact quote`;
-      renderAll();
+      scheduleRender();
       clearError();
       setConnection(lastReceivedAt ? "live" : "", lastReceivedAt ? "Live" : "History loaded");
     } catch (error) {
@@ -305,7 +305,7 @@
       } catch {
         // Keep the switch error visible if the previous market cannot be restored.
       }
-      renderAll();
+      scheduleRender();
     } finally {
       switching = false;
       switchingSymbol = null;

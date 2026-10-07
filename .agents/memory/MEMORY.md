@@ -1,3 +1,4 @@
 - [Deriv quote precision](deriv-quote-precision.md) — pad quote strings to the API's pip_size before extracting the last digit, or trailing zero digits disappear.
 - [Deriv tick identifiers](deriv-tick-identifiers.md) — the public-stream `tick.id` repeats across ticks; do not use it alone for deduplication.
 - [Analysis-score framing](analysis-score-framing.md) — Keep market scores descriptive and heuristic; never present them as predictions or probabilities.
+- [Deriv rate-limit recovery](deriv-rate-limits.md) — separate live tick subscriptions from history requests and back off until actual ticks confirm the connection is healthy.
