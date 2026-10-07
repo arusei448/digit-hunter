@@ -831,18 +831,25 @@ function handleMessage(socket, data) {
         trend,
         timestamp: tick.timestamp,
         symbol,
+        tickId: msg.tick.id ?? null,
+        pipSize: typeof msg.tick.pip_size === 'number'
+            && Number.isInteger(msg.tick.pip_size)
+            ? msg.tick.pip_size
+            : null,
     });
 }
 
 function scheduleReconnect() {
     if (shuttingDown || reconnectTimer) return;
     const delay = reconnectDelay;
+    const jitter = Math.random() * 500;
+    const reconnectIn = delay + jitter;
     reconnectDelay = Math.min(reconnectDelay * 2, 30000);
-    console.log(`Reconnecting to Deriv in ${delay / 1000}s`);
+    console.log(`Reconnecting to Deriv in ${(reconnectIn / 1000).toFixed(2)}s`);
     reconnectTimer = setTimeout(() => {
         reconnectTimer = null;
         connectToDeriv();
-    }, delay);
+    }, reconnectIn);
 }
 
 function connectToDeriv() {
@@ -999,6 +1006,10 @@ server.on('error', (error) => {
     console.error('HTTP server error:', error.message);
 });
 
+server.keepAliveTimeout = 65000;
+server.headersTimeout = 66000;
+server.timeout = 0;
+
 const aiBroadcastTimer = setInterval(() => {
     if (aiClients.size === 0) return;
     writeToClients(aiClients, buildAIAnalysisPayload());
@@ -1021,6 +1032,7 @@ function writeHeartbeat(clients) {
 const sseHeartbeatTimer = setInterval(() => {
     writeHeartbeat(directionClients);
     writeHeartbeat(sseClients);
+    writeHeartbeat(aiClients);
 }, 15000);
 
 server.listen(PORT, '0.0.0.0', () => {

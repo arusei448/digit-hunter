@@ -33,3 +33,6 @@ waitForPort = 5000
 
 [workflows.workflow.metadata]
 outputType = "webview"
+
+[env]
+NODE_ENV = "production"
