@@ -13,8 +13,6 @@
   let windowSize = 50;
   let currentSymbol = "1HZ10V";
   let currentMarkets = { ...FALLBACK_MARKETS };
-  let lastTickId = null;
-  let currentPipSize = 4;
   let lastReceivedAt = 0;
   let streamOpenedAt = 0;
   let switching = false;
@@ -23,28 +21,8 @@
   let stream = null;
   let streamBars = [];
 
-  function preserveQuotePrecision(quote, pipSize) {
-    const value = String(quote);
-    if (!Number.isInteger(pipSize) || pipSize < 0 || pipSize > 12) return value;
-    const decimalIndex = value.indexOf(".");
-    if (pipSize === 0) return value;
-    if (decimalIndex === -1) return `${value}.${"0".repeat(pipSize)}`;
-    const currentPrecision = value.length - decimalIndex - 1;
-    return currentPrecision < pipSize
-      ? `${value}${"0".repeat(pipSize - currentPrecision)}`
-      : value;
-  }
-
   function normalizeTick(source) {
-    const pipSize = source.pipSize;
-    const hasPipSize = typeof pipSize === "number"
-      && Number.isInteger(pipSize)
-      && pipSize >= 0
-      && pipSize <= 12;
-    if (hasPipSize) currentPipSize = pipSize;
-    const quote = hasPipSize
-      ? preserveQuotePrecision(source.quote ?? "", currentPipSize)
-      : String(source.quote ?? "");
+    const quote = String(source.quote ?? "");
     const numericQuote = Number(quote);
     const timestamp = Number(source.timestamp);
     if (!Number.isFinite(numericQuote) || !Number.isFinite(timestamp)) return null;
@@ -56,9 +34,7 @@
       timestamp,
       trend: ["up", "down", "flat"].includes(source.trend) ? source.trend : "flat",
       symbol: source.symbol,
-      digit,
-      tickId: source.tickId ?? null,
-      pipSize: hasPipSize ? pipSize : null
+      digit
     };
   }
 
@@ -277,8 +253,6 @@
     const previousSymbol = currentSymbol;
     switching = true;
     switchingSymbol = symbol;
-    lastTickId = null;
-    currentPipSize = 4;
     bufferedSwitchTicks = [];
     $("market-select").disabled = true;
     clearError();
@@ -290,7 +264,7 @@
     $("loading-state").hidden = false;
     $("loading-copy").textContent = "Switching market and loading fresh history";
     setConnection("", "Switching market");
-    scheduleRender();
+    renderAll();
     try {
       const switched = await requestJson(`/switch?symbol=${encodeURIComponent(symbol)}`);
       if (!switched.symbol || switched.symbol !== symbol) throw new Error("Market switch was not confirmed by the data service.");
@@ -298,11 +272,10 @@
       currentSymbol = symbol;
       const historyTicks = switched.history.map(normalizeTick).filter(Boolean);
       allTicks = mergeBufferedTicks(historyTicks, bufferedSwitchTicks);
-      lastTickId = bufferedSwitchTicks.at(-1)?.tickId ?? null;
       const latest = allTicks[allTicks.length - 1];
       if (latest) updatePrice(latest);
       $("market-symbol").textContent = `${symbol} · exact quote`;
-      scheduleRender();
+      renderAll();
       clearError();
       setConnection(lastReceivedAt ? "live" : "", lastReceivedAt ? "Live" : "History loaded");
     } catch (error) {
@@ -332,7 +305,7 @@
       } catch {
         // Keep the switch error visible if the previous market cannot be restored.
       }
-      scheduleRender();
+      renderAll();
     } finally {
       switching = false;
       switchingSymbol = null;
@@ -357,8 +330,6 @@
           const buffered = normalizeTick(data);
           if (buffered) {
             lastReceivedAt = Date.now();
-            if (buffered.tickId !== null
-              && bufferedSwitchTicks.some((tick) => tick.tickId === buffered.tickId)) return;
             bufferedSwitchTicks.push(buffered);
           }
         }
@@ -369,12 +340,10 @@
       if (!tick) return;
       lastReceivedAt = Date.now();
       updatePrice(tick);
-      setConnection("live", "Live");
-      clearError();
-      if (tick.tickId !== null && tick.tickId === lastTickId) return;
-      if (tick.tickId !== null) lastTickId = tick.tickId;
       allTicks.push(tick);
       if (allTicks.length > 1000) allTicks.shift();
+      setConnection("live", "Live");
+      clearError();
       scheduleRender();
     };
     stream.onerror = () => {
