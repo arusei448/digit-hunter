@@ -68,9 +68,15 @@ const STATIC_FILES = new Map([
     ['/', 'index.html'],
     ['/risefall', 'risefall.html'],
     ['/ai-analyser', 'ai-analyser.html'],
+    ['/login', 'login.html'],
+    ['/trade', 'trade.html'],
+    ['/bot', 'bot.html'],
     ['/app.js', 'app.js'],
     ['/risefall.js', 'risefall.js'],
     ['/ai-analyser.js', 'ai-analyser.js'],
+    ['/login.js', 'login.js'],
+    ['/trade.js', 'trade.js'],
+    ['/bot.js', 'bot.js'],
 ]);
 
 function sendJson(res, statusCode, payload) {
@@ -914,6 +920,36 @@ const server = http.createServer(async (req, res) => {
         url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     } catch {
         sendJson(res, 400, { error: 'Invalid request URL' });
+        return;
+    }
+
+    if (req.method === 'POST' && (url.pathname === '/api/otp' || url.pathname === '/api/accounts')) {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', async () => {
+            try {
+                const payload = JSON.parse(body);
+                const derivPath = url.pathname === '/api/otp'
+                    ? `trading/v1/options/accounts/${payload.accountId}/otp`
+                    : 'trading/v1/options/accounts';
+                const response = await fetch(
+                    `https://api.derivws.com/${derivPath}`,
+                    {
+                        method: url.pathname === '/api/otp' ? 'POST' : 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${payload.token}`,
+                            'Deriv-App-ID': '34BGMNrNna3eTueb5kkXq8',
+                        },
+                    }
+                );
+                const data = await response.json();
+                res.writeHead(response.ok ? 200 : response.status, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(data));
+            } catch (err) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Proxy request failed' }));
+            }
+        });
         return;
     }
 

@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0f1117">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231a1d24'/%3E%3Cpath d='M8 40h11l7-21 10 27 7-17h13' fill='none' stroke='%2354c8d5' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <title>Bots — Deriv Analytics</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg:#0f1117; --panel:#1a1d24; --panel-raised:#20242c; --panel-deep:#14161c;
+      --line:#2a2e37; --line-bright:#3a414d; --ink:#e8eaed; --muted:#8892a0; --quiet:#626c7b;
+      --cyan:#54c8d5; --cyan-soft:#16343a; --lime:#9bd56b; --coral:#ed7772;
+      --mono:"DM Mono","SFMono-Regular",Consolas,monospace; --sans:"DM Sans","Segoe UI",sans-serif; --radius:10px;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100dvh;color:var(--ink);background:var(--bg);font-family:var(--sans);font-size:14px;letter-spacing:.005em;background-image:radial-gradient(ellipse at 50% -28%,rgba(84,200,213,.075),transparent 54%)}
+    button,select,input{font:inherit}
+    button:focus-visible,select:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
+    .topbar{position:sticky;top:0;z-index:10;height:60px;background:rgba(15,17,23,.94);border-bottom:1px solid var(--line);backdrop-filter:blur(14px)}
+    .nav-inner{max-width:1440px;height:100%;margin:auto;padding:0 16px;display:flex;align-items:center;justify-content:space-between}
+    .brand{display:flex;gap:11px;align-items:center;color:var(--ink);text-decoration:none;font-weight:700;letter-spacing:-.035em}
+    .brand-mark{display:grid;place-items:center;width:31px;height:31px;border:1px solid #3b6268;background:#17292d;border-radius:8px;color:var(--cyan)}
+    .brand-mark svg{width:19px;height:19px}
+    .brand-name{font-size:15px}.brand-name span{color:var(--muted);font-weight:500}
+    .nav-links{align-self:stretch;display:flex;align-items:center;gap:7px}
+    .nav-link{height:100%;display:inline-flex;align-items:center;padding:0 15px;color:var(--muted);text-decoration:none;border-bottom:2px solid transparent;font-size:13px;transition:color .16s ease,border-color .16s ease}
+    .nav-link:hover{color:var(--ink)}.nav-link.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+    .bot-wrap{max-width:900px;margin:0 auto;padding:16px}
+    .bot-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+    .bot-panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
+    .panel-title{margin:0 0 16px;color:var(--ink);font-size:14px;font-weight:600}
+    .field-group{margin-bottom:14px}
+    .field-label{display:block;margin-bottom:6px;color:var(--quiet);font:500 10px var(--mono);letter-spacing:.1em;text-transform:uppercase}
+    .field-select,.field-input{width:100%;padding:10px 12px;border:1px solid var(--line-bright);border-radius:7px;background:#13161c;color:var(--ink);font-size:13px;transition:border-color .15s ease}
+    .field-select{cursor:pointer}.field-select:hover{border-color:#53777c}
+    .field-input:focus{border-color:var(--cyan)}
+    .field-input::placeholder{color:var(--quiet)}
+    .action-row{display:flex;gap:10px;margin-top:6px}
+    .start-btn,.stop-btn{flex:1;padding:13px;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;transition:opacity .15s ease}
+    .start-btn{background:var(--lime);color:#0f1117}
+    .start-btn:not(:disabled):hover{background:#aee07e}
+    .stop-btn{background:var(--coral);color:#0f1117}
+    .stop-btn:not(:disabled):hover{background:#f2908b}
+    .start-btn:disabled,.stop-btn:disabled{opacity:.35;cursor:progress}
+    .status-panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:12px}
+    .status-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+    .status-stat{padding:14px;border:1px solid var(--line);border-radius:8px;background:var(--panel-deep)}
+    .status-label{color:var(--quiet);font:500 9px var(--mono);letter-spacing:.1em;text-transform:uppercase}
+    .status-value{margin-top:8px;color:var(--ink);font:700 18px var(--mono);letter-spacing:-.03em}
+    .status-value.green{color:var(--lime)}.status-value.red{color:var(--coral)}.status-value.cyan{color:var(--cyan)}
+    .status-indicator{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:7px;font:500 12px var(--mono);letter-spacing:.05em;text-transform:uppercase}
+    .status-indicator.running{background:var(--lime-soft);color:var(--lime)}
+    .status-indicator.stopped{background:#2a2e37;color:var(--muted)}
+    .status-indicator.paused{background:#2a2418;color:#e8b978}
+    .status-dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+    .status-indicator.running .status-dot{animation:pulse 1.5s ease-in-out infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+    .history-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+    .history-head{padding:13px 16px;border-bottom:1px solid var(--line);font-size:13px;font-weight:600}
+    .history-table{width:100%;border-collapse:collapse}
+    .history-table th{padding:10px 14px;text-align:left;color:var(--quiet);font:500 10px var(--mono);letter-spacing:.08em;text-transform:uppercase;border-bottom:1px solid var(--line)}
+    .history-table td{padding:10px 14px;border-bottom:1px solid var(--line);font-size:12px;color:var(--ink)}
+    .history-table tr:last-child td{border-bottom:0}
+    .empty-row td{text-align:center;color:var(--quiet);padding:24px}
+    .risk-banner{margin-bottom:12px;padding:10px 14px;border:1px solid #39414a;border-radius:8px;background:#171a20;color:var(--muted);font-size:11px;line-height:1.55}
+    .risk-banner strong{color:#e8b978}
+    .not-connected{max-width:460px;margin:80px auto;text-align:center;padding:32px}
+    .not-connected h2{color:var(--ink);font-size:20px;margin:0 0 10px}
+    .not-connected p{color:var(--muted);font-size:13px;margin:0 0 20px}
+    .not-connected a{display:inline-block;padding:12px 28px;border-radius:8px;background:var(--cyan);color:#0f1117;font-weight:700;text-decoration:none;font-size:14px}
+    @media(max-width:720px){
+      .bot-grid{grid-template-columns:1fr}
+      .status-grid{grid-template-columns:repeat(2,1fr)}
+    }
+    @media(max-width:520px){
+      .topbar{height:56px}.nav-inner{padding:0 10px}.brand-name{font-size:13px}
+      .nav-links{gap:0}.nav-link{padding:0 9px;font-size:11px}
+      .bot-wrap{padding:12px}
+    }
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+  </style>
+</head>
+<body>
+  <nav class="topbar" aria-label="Main navigation">
+    <div class="nav-inner">
+      <a class="brand" href="/" aria-label="Deriv Analytics home">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none"><path d="M2 14.5h3.2l2.3-7 3.1 8 2.2-5h5.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="brand-name">deriv <span>analytics</span></span>
+      </a>
+      <div class="nav-links">
+        <a class="nav-link" href="/">Digits</a>
+        <a class="nav-link" href="/risefall">Rise &amp; Fall</a>
+        <a class="nav-link" href="/ai-analyser">AI Analyser</a>
+        <a class="nav-link" href="/login">Login</a>
+        <a class="nav-link" href="/trade">Trade</a>
+        <a class="nav-link active" href="/bot" aria-current="page">Bots</a>
+      </div>
+    </div>
+  </nav>
+
+  <div id="bot-content" style="display:none">
+    <div class="bot-wrap">
+      <div class="risk-banner">
+        <strong>Risk warning:</strong> Automated trading bots can rapidly lose money. Deriv volatility indices are randomly generated — no strategy can predict future ticks. Set strict loss thresholds and only use capital you can afford to lose entirely.
+      </div>
+
+      <div class="bot-grid">
+        <div class="bot-panel">
+          <h3 class="panel-title">Strategy &amp; Parameters</h3>
+          <div class="field-group">
+            <label class="field-label" for="strategy-select">Strategy</label>
+            <select class="field-select" id="strategy-select">
+              <option value="Martingale">Martingale</option>
+              <option value="D'Alembert">D'Alembert</option>
+              <option value="Oscar's Grind">Oscar's Grind</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="initial-stake">Initial Stake (USD)</label>
+            <input class="field-input" type="number" id="initial-stake" value="1" min="0.35" step="0.5">
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="multiplier">Multiplier (Martingale)</label>
+            <input class="field-input" type="number" id="multiplier" value="2" min="1" step="0.1">
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="profit-threshold">Profit Threshold (USD)</label>
+            <input class="field-input" type="number" id="profit-threshold" value="10" min="1" step="1">
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="loss-threshold">Loss Threshold (USD)</label>
+            <input class="field-input" type="number" id="loss-threshold" value="20" min="1" step="1">
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="max-stake">Max Stake (USD)</label>
+            <input class="field-input" type="number" id="max-stake" value="50" min="1" step="1">
+          </div>
+        </div>
+
+        <div class="bot-panel">
+          <h3 class="panel-title">Contract Settings</h3>
+          <div class="field-group">
+            <label class="field-label" for="bot-symbol">Symbol</label>
+            <select class="field-select" id="bot-symbol">
+              <option value="R_10">Volatility 10 Index</option>
+              <option value="R_25">Volatility 25 Index</option>
+              <option value="R_50">Volatility 50 Index</option>
+              <option value="R_75">Volatility 75 Index</option>
+              <option value="R_100" selected>Volatility 100 Index</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="bot-contract-type">Contract Type</label>
+            <select class="field-select" id="bot-contract-type">
+              <option value="CALL">Rise</option>
+              <option value="PUT">Fall</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="bot-duration">Duration (ticks)</label>
+            <select class="field-select" id="bot-duration">
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="5" selected>5</option>
+              <option value="10">10</option>
+            </select>
+          </div>
+          <div class="action-row">
+            <button class="start-btn" id="start-btn" type="button">Start Bot</button>
+            <button class="stop-btn" id="stop-btn" type="button" disabled>Stop Bot</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="status-panel">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <h3 class="panel-title" style="margin:0">Bot Status</h3>
+          <span class="status-indicator stopped" id="bot-status-indicator"><span class="status-dot"></span> Stopped</span>
+        </div>
+        <div class="status-grid">
+          <div class="status-stat"><div class="status-label">Rounds</div><div class="status-value cyan" id="stat-rounds">0</div></div>
+          <div class="status-stat"><div class="status-label">Current Stake</div><div class="status-value" id="stat-stake">$0.00</div></div>
+          <div class="status-stat"><div class="status-label">Total P&amp;L</div><div class="status-value" id="stat-pnl">$0.00</div></div>
+          <div class="status-stat"><div class="status-label">W/L</div><div class="status-value" id="stat-wl">0 / 0</div></div>
+        </div>
+      </div>
+
+      <div class="history-card">
+        <div class="history-head">Bot History</div>
+        <table class="history-table">
+          <thead><tr><th>Round</th><th>Stake</th><th>Type</th><th>Result</th><th>P&amp;L</th></tr></thead>
+          <tbody id="bot-history-body">
+            <tr class="empty-row"><td colspan="5">No bot activity yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="not-connected" id="not-connected">
+    <h2>Not connected</h2>
+    <p>You need to log in with your Deriv API token before you can use trading bots.</p>
+    <a href="/login">Go to Login</a>
+  </div>
+
+  <script src="/bot.js"></script>
+</body>
+</html>

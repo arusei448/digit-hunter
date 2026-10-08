@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0f1117">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231a1d24'/%3E%3Cpath d='M8 40h11l7-21 10 27 7-17h13' fill='none' stroke='%2354c8d5' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <title>Trade — Deriv Analytics</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg:#0f1117; --panel:#1a1d24; --panel-raised:#20242c; --panel-deep:#14161c;
+      --line:#2a2e37; --line-bright:#3a414d; --ink:#e8eaed; --muted:#8892a0; --quiet:#626c7b;
+      --cyan:#54c8d5; --cyan-soft:#16343a; --lime:#9bd56b; --coral:#ed7772;
+      --mono:"DM Mono","SFMono-Regular",Consolas,monospace; --sans:"DM Sans","Segoe UI",sans-serif; --radius:10px;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100dvh;color:var(--ink);background:var(--bg);font-family:var(--sans);font-size:14px;letter-spacing:.005em;background-image:radial-gradient(ellipse at 50% -28%,rgba(84,200,213,.075),transparent 54%)}
+    button,select,input{font:inherit}
+    button:focus-visible,select:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
+    .topbar{position:sticky;top:0;z-index:10;height:60px;background:rgba(15,17,23,.94);border-bottom:1px solid var(--line);backdrop-filter:blur(14px)}
+    .nav-inner{max-width:1440px;height:100%;margin:auto;padding:0 16px;display:flex;align-items:center;justify-content:space-between}
+    .brand{display:flex;gap:11px;align-items:center;color:var(--ink);text-decoration:none;font-weight:700;letter-spacing:-.035em}
+    .brand-mark{display:grid;place-items:center;width:31px;height:31px;border:1px solid #3b6268;background:#17292d;border-radius:8px;color:var(--cyan)}
+    .brand-mark svg{width:19px;height:19px}
+    .brand-name{font-size:15px}.brand-name span{color:var(--muted);font-weight:500}
+    .nav-links{align-self:stretch;display:flex;align-items:center;gap:7px}
+    .nav-link{height:100%;display:inline-flex;align-items:center;padding:0 15px;color:var(--muted);text-decoration:none;border-bottom:2px solid transparent;font-size:13px;transition:color .16s ease,border-color .16s ease}
+    .nav-link:hover{color:var(--ink)}.nav-link.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+    .trade-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 16px;max-width:1440px;margin:0 auto}
+    .balance-info{display:flex;align-items:center;gap:14px}
+    .account-badge{padding:5px 12px;border-radius:6px;font:500 11px var(--mono);letter-spacing:.06em;text-transform:uppercase}
+    .account-badge.demo{background:#2a2418;color:#e8b978}
+    .account-badge.real{background:var(--coral-soft);color:var(--coral)}
+    .balance-amount{color:var(--ink);font:500 18px var(--mono);letter-spacing:-.03em}
+    .logout-btn{padding:7px 16px;border:1px solid var(--line-bright);border-radius:7px;background:transparent;color:var(--muted);cursor:pointer;font-size:12px;transition:color .15s ease,border-color .15s ease}
+    .logout-btn:hover{color:var(--coral);border-color:var(--coral)}
+    .trade-layout{max-width:1440px;margin:0 auto;padding:0 16px 32px;display:grid;grid-template-columns:220px 1fr 300px;gap:12px}
+    .trade-panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+    .panel-title{margin:0 0 14px;color:var(--ink);font-size:13px;font-weight:600}
+    .contract-type-btn{display:flex;align-items:center;gap:9px;width:100%;padding:11px 14px;margin-bottom:8px;border:1px solid var(--line-bright);border-radius:8px;background:#15181e;color:var(--muted);cursor:pointer;font-size:13px;font-weight:500;transition:all .15s ease;text-align:left}
+    .contract-type-btn:hover{border-color:var(--cyan);color:var(--ink)}
+    .contract-type-btn.active{border-color:var(--cyan);background:var(--cyan-soft);color:var(--cyan)}
+    .contract-icon{font:500 16px var(--mono)}
+    .chart-panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+    .chart-head{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+    .chart-head-title{font-size:13px;font-weight:600}
+    .chart-head-price{font:500 16px var(--mono);color:var(--cyan)}
+    .chart-canvas-wrap{padding:8px;min-height:340px}
+    #trade-chart{width:100%;height:340px}
+    .control-group{margin-bottom:16px}
+    .control-label{display:block;margin-bottom:7px;color:var(--quiet);font:500 10px var(--mono);letter-spacing:.1em;text-transform:uppercase}
+    .stake-row{display:flex;align-items:center;gap:8px}
+    .step-btn{width:36px;height:38px;flex:0 0 auto;border:1px solid var(--line-bright);border-radius:7px;background:#15181e;color:var(--ink);cursor:pointer;font-size:16px;transition:all .15s ease}
+    .step-btn:hover{border-color:var(--cyan);color:var(--cyan)}
+    .num-input{flex:1;width:100%;padding:10px 12px;border:1px solid var(--line-bright);border-radius:7px;background:#13161c;color:var(--ink);font:500 14px var(--mono);text-align:center}
+    .num-input:focus{border-color:var(--cyan)}
+    .duration-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+    .duration-btn{padding:8px 0;border:1px solid var(--line-bright);border-radius:6px;background:#15181e;color:var(--muted);cursor:pointer;font:500 12px var(--mono);transition:all .15s ease}
+    .duration-btn:hover{border-color:var(--cyan);color:var(--ink)}
+    .duration-btn.active{border-color:var(--cyan);background:var(--cyan-soft);color:var(--cyan)}
+    .payout-box{padding:12px 14px;border:1px solid var(--line);border-radius:8px;background:var(--panel-deep);margin-bottom:16px}
+    .payout-label{color:var(--quiet);font:500 10px var(--mono);letter-spacing:.1em;text-transform:uppercase}
+    .payout-value{margin-top:4px;color:var(--lime);font:700 20px var(--mono)}
+    .payout-empty{margin-top:4px;color:var(--quiet);font:500 14px var(--mono)}
+    .trade-action-btn{width:100%;padding:14px;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;transition:opacity .15s ease;letter-spacing:-.01em}
+    .trade-action-btn:disabled{opacity:.4;cursor:progress}
+    .rise-btn{background:var(--lime);color:#0f1117}
+    .rise-btn:not(:disabled):hover{background:#aee07e}
+    .fall-btn{background:var(--coral);color:#0f1117;margin-top:8px}
+    .fall-btn:not(:disabled):hover{background:#f2908b}
+    .market-select{width:100%;padding:9px 30px 9px 11px;border:1px solid var(--line-bright);border-radius:7px;background:#13161c;color:var(--ink);font-size:12px;cursor:pointer}
+    .market-select:hover{border-color:#53777c}
+    .positions-panel{max-width:1440px;margin:0 auto;padding:0 16px 32px}
+    .positions-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+    .positions-head{padding:13px 16px;border-bottom:1px solid var(--line);font-size:13px;font-weight:600}
+    .positions-table{width:100%;border-collapse:collapse}
+    .positions-table th{padding:10px 14px;text-align:left;color:var(--quiet);font:500 10px var(--mono);letter-spacing:.08em;text-transform:uppercase;border-bottom:1px solid var(--line)}
+    .positions-table td{padding:11px 14px;border-bottom:1px solid var(--line);font-size:12px;color:var(--ink)}
+    .positions-table tr:last-child td{border-bottom:0}
+    .pnl-positive{color:var(--lime);font:500 12px var(--mono)}
+    .pnl-negative{color:var(--coral);font:500 12px var(--mono)}
+    .sell-btn{padding:5px 12px;border:1px solid var(--line-bright);border-radius:5px;background:transparent;color:var(--coral);cursor:pointer;font-size:11px;transition:all .15s ease}
+    .sell-btn:hover{background:var(--coral-soft);border-color:var(--coral)}
+    .empty-row td{text-align:center;color:var(--quiet);padding:30px}
+    .contract-modal{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)}
+    .contract-modal.show{display:flex}
+    .modal-card{width:100%;max-width:400px;margin:16px;background:var(--panel);border:1px solid var(--line-bright);border-radius:14px;padding:28px 24px}
+    .modal-title{margin:0 0 16px;font-size:16px;font-weight:700}
+    .modal-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+    .modal-row:last-of-type{border-bottom:0}
+    .modal-label{color:var(--muted);font-size:12px}
+    .modal-value{color:var(--ink);font:500 14px var(--mono)}
+    .modal-close{width:100%;margin-top:18px;padding:11px;border:1px solid var(--line-bright);border-radius:8px;background:transparent;color:var(--muted);cursor:pointer;font-size:13px;transition:all .15s ease}
+    .modal-close:hover{color:var(--ink);border-color:var(--cyan)}
+    .risk-banner{max-width:1440px;margin:12px auto;padding:10px 16px;border:1px solid #39414a;border-radius:8px;background:#171a20;color:var(--muted);font-size:11px;line-height:1.55}
+    .risk-banner strong{color:#e8b978}
+    .not-connected{max-width:460px;margin:80px auto;text-align:center;padding:32px}
+    .not-connected h2{color:var(--ink);font-size:20px;margin:0 0 10px}
+    .not-connected p{color:var(--muted);font-size:13px;margin:0 0 20px}
+    .not-connected a{display:inline-block;padding:12px 28px;border-radius:8px;background:var(--cyan);color:#0f1117;font-weight:700;text-decoration:none;font-size:14px}
+    @media(max-width:1100px){
+      .trade-layout{grid-template-columns:1fr;gap:10px}
+    }
+    @media(max-width:520px){
+      .topbar{height:56px}.nav-inner{padding:0 10px}.brand-name{font-size:13px}
+      .nav-links{gap:0}.nav-link{padding:0 9px;font-size:11px}
+      .trade-bar{padding:10px 12px}.balance-amount{font-size:15px}
+      .trade-layout{padding:0 12px 24px}
+      .positions-panel{padding:0 12px 24px}
+      .duration-grid{grid-template-columns:repeat(3,1fr)}
+    }
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+  </style>
+</head>
+<body>
+  <nav class="topbar" aria-label="Main navigation">
+    <div class="nav-inner">
+      <a class="brand" href="/" aria-label="Deriv Analytics home">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none"><path d="M2 14.5h3.2l2.3-7 3.1 8 2.2-5h5.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="brand-name">deriv <span>analytics</span></span>
+      </a>
+      <div class="nav-links">
+        <a class="nav-link" href="/">Digits</a>
+        <a class="nav-link" href="/risefall">Rise &amp; Fall</a>
+        <a class="nav-link" href="/ai-analyser">AI Analyser</a>
+        <a class="nav-link" href="/login">Login</a>
+        <a class="nav-link active" href="/trade" aria-current="page">Trade</a>
+        <a class="nav-link" href="/bot">Bots</a>
+      </div>
+    </div>
+  </nav>
+
+  <div id="trade-content" style="display:none">
+    <div class="trade-bar">
+      <div class="balance-info">
+        <span class="account-badge" id="account-badge">—</span>
+        <span class="balance-amount" id="balance-display">$0.00</span>
+      </div>
+      <button class="logout-btn" id="logout-btn" type="button">Logout</button>
+    </div>
+
+    <div class="risk-banner">
+      <strong>Risk warning:</strong> Trading binary options carries a high level of risk. You can lose all your invested capital. Only trade with money you can afford to lose.
+    </div>
+
+    <div class="trade-layout">
+      <div class="trade-panel">
+        <h3 class="panel-title">Contract Type</h3>
+        <button class="contract-type-btn active" data-type="CALL" type="button"><span class="contract-icon">↑</span> Rise</button>
+        <button class="contract-type-btn" data-type="PUT" type="button"><span class="contract-icon">↓</span> Fall</button>
+        <div style="margin-top:18px">
+          <label class="control-label" for="market-select">Market</label>
+          <select class="market-select" id="market-select">
+            <option value="R_10">Volatility 10 Index</option>
+            <option value="R_25">Volatility 25 Index</option>
+            <option value="R_50">Volatility 50 Index</option>
+            <option value="R_75">Volatility 75 Index</option>
+            <option value="R_100" selected>Volatility 100 Index</option>
+            <option value="1HZ10V">Volatility 10 (1s) Index</option>
+            <option value="1HZ25V">Volatility 25 (1s) Index</option>
+            <option value="1HZ50V">Volatility 50 (1s) Index</option>
+            <option value="1HZ75V">Volatility 75 (1s) Index</option>
+            <option value="1HZ100V">Volatility 100 (1s) Index</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="chart-panel">
+        <div class="chart-head">
+          <span class="chart-head-title" id="chart-symbol-label">Volatility 100 Index</span>
+          <span class="chart-head-price" id="chart-price">—</span>
+        </div>
+        <div class="chart-canvas-wrap"><div id="trade-chart"></div></div>
+      </div>
+
+      <div class="trade-panel">
+        <h3 class="panel-title">Trade Controls</h3>
+        <div class="control-group">
+          <label class="control-label" for="stake-input">Stake (USD)</label>
+          <div class="stake-row">
+            <button class="step-btn" id="stake-minus" type="button">−</button>
+            <input class="num-input" type="number" id="stake-input" value="1" min="0.35" step="0.5">
+            <button class="step-btn" id="stake-plus" type="button">+</button>
+          </div>
+        </div>
+        <div class="control-group">
+          <label class="control-label">Duration (ticks)</label>
+          <div class="duration-grid">
+            <button class="duration-btn" data-dur="1" type="button">1</button>
+            <button class="duration-btn" data-dur="2" type="button">2</button>
+            <button class="duration-btn" data-dur="3" type="button">3</button>
+            <button class="duration-btn active" data-dur="5" type="button">5</button>
+            <button class="duration-btn" data-dur="10" type="button">10</button>
+          </div>
+        </div>
+        <div class="payout-box">
+          <div class="payout-label">Potential Payout</div>
+          <div class="payout-value" id="payout-display" style="display:none">$0.00</div>
+          <div class="payout-empty" id="payout-empty">Select stake &amp; duration</div>
+        </div>
+        <button class="trade-action-btn rise-btn" id="rise-btn" type="button" disabled>RISE</button>
+        <button class="trade-action-btn fall-btn" id="fall-btn" type="button" disabled>FALL</button>
+      </div>
+    </div>
+
+    <div class="positions-panel">
+      <div class="positions-card">
+        <div class="positions-head">Open Positions</div>
+        <table class="positions-table">
+          <thead>
+            <tr><th>Contract ID</th><th>Type</th><th>Stake</th><th>Entry Spot</th><th>Current P&amp;L</th><th>Action</th></tr>
+          </thead>
+          <tbody id="positions-body">
+            <tr class="empty-row"><td colspan="6">No open positions</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="contract-modal" id="contract-modal">
+      <div class="modal-card">
+        <h3 class="modal-title">Contract Monitor</h3>
+        <div class="modal-row"><span class="modal-label">Contract ID</span><span class="modal-value" id="modal-contract-id">—</span></div>
+        <div class="modal-row"><span class="modal-label">Type</span><span class="modal-value" id="modal-type">—</span></div>
+        <div class="modal-row"><span class="modal-label">Entry Spot</span><span class="modal-value" id="modal-entry">—</span></div>
+        <div class="modal-row"><span class="modal-label">Current Spot</span><span class="modal-value" id="modal-current">—</span></div>
+        <div class="modal-row"><span class="modal-label">P&amp;L</span><span class="modal-value" id="modal-pnl">—</span></div>
+        <div class="modal-row"><span class="modal-label">Status</span><span class="modal-value" id="modal-status">—</span></div>
+        <button class="modal-close" id="modal-close" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="not-connected" id="not-connected">
+    <h2>Not connected</h2>
+    <p>You need to log in with your Deriv API token before you can access the trading interface.</p>
+    <a href="/login">Go to Login</a>
+  </div>
+
+  <script src="/trade.js"></script>
+</body>
+</html>

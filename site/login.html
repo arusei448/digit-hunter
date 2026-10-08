@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0f1117">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231a1d24'/%3E%3Cpath d='M8 40h11l7-21 10 27 7-17h13' fill='none' stroke='%2354c8d5' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <title>Login — Deriv Analytics</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg:#0f1117; --panel:#1a1d24; --panel-raised:#20242c; --panel-deep:#14161c;
+      --line:#2a2e37; --line-bright:#3a414d; --ink:#e8eaed; --muted:#8892a0; --quiet:#626c7b;
+      --cyan:#54c8d5; --cyan-soft:#16343a; --lime:#9bd56b; --coral:#ed7772;
+      --mono:"DM Mono","SFMono-Regular",Consolas,monospace; --sans:"DM Sans","Segoe UI",sans-serif; --radius:10px;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100dvh;color:var(--ink);background:var(--bg);font-family:var(--sans);font-size:14px;letter-spacing:.005em;background-image:radial-gradient(ellipse at 50% -28%,rgba(84,200,213,.075),transparent 54%)}
+    button,select,input{font:inherit}
+    button:focus-visible,select:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
+    .topbar{position:sticky;top:0;z-index:10;height:60px;background:rgba(15,17,23,.94);border-bottom:1px solid var(--line);backdrop-filter:blur(14px)}
+    .nav-inner{max-width:1440px;height:100%;margin:auto;padding:0 16px;display:flex;align-items:center;justify-content:space-between}
+    .brand{display:flex;gap:11px;align-items:center;color:var(--ink);text-decoration:none;font-weight:700;letter-spacing:-.035em}
+    .brand-mark{display:grid;place-items:center;width:31px;height:31px;border:1px solid #3b6268;background:#17292d;border-radius:8px;color:var(--cyan)}
+    .brand-mark svg{width:19px;height:19px}
+    .brand-name{font-size:15px}.brand-name span{color:var(--muted);font-weight:500}
+    .nav-links{align-self:stretch;display:flex;align-items:center;gap:7px}
+    .nav-link{height:100%;display:inline-flex;align-items:center;padding:0 15px;color:var(--muted);text-decoration:none;border-bottom:2px solid transparent;font-size:13px;transition:color .16s ease,border-color .16s ease}
+    .nav-link:hover{color:var(--ink)}.nav-link.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+    .login-wrap{max-width:460px;margin:60px auto;padding:0 16px}
+    .login-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:36px 32px}
+    .login-eyebrow{color:var(--cyan);font:500 10px var(--mono);letter-spacing:.16em;text-transform:uppercase;margin-bottom:10px}
+    .login-card h1{margin:0 0 6px;font-size:22px;font-weight:700;color:#fff;letter-spacing:-.04em}
+    .login-card p{margin:0 0 28px;color:var(--muted);font-size:13px;line-height:1.5}
+    .field-group{margin-bottom:20px}
+    .field-label{display:block;margin-bottom:7px;color:var(--quiet);font:500 10px var(--mono);letter-spacing:.1em;text-transform:uppercase}
+    .field-input{width:100%;padding:12px 14px;border:1px solid var(--line-bright);border-radius:8px;background:#13161c;color:var(--ink);font-size:14px;transition:border-color .15s ease}
+    .field-input:hover{border-color:#53777c}
+    .field-input:focus{border-color:var(--cyan)}
+    .field-input::placeholder{color:var(--quiet)}
+    .connect-btn{width:100%;padding:13px;border:none;border-radius:8px;background:var(--cyan);color:#0f1117;font-size:14px;font-weight:700;cursor:pointer;transition:background .15s ease,opacity .15s ease;letter-spacing:-.01em}
+    .connect-btn:hover{background:#6ddbe8}
+    .connect-btn:disabled{opacity:.5;cursor:progress}
+    .status-msg{margin-top:16px;padding:11px 14px;border-radius:8px;font-size:13px;line-height:1.5;display:none}
+    .status-msg.show{display:block}
+    .status-msg.error{border:1px solid #634044;background:#281c20;color:#f0b0a9}
+    .status-msg.success{border:1px solid #2e4a32;background:#172719;color:var(--lime)}
+    .status-msg.info{border:1px solid #3a414d;background:#1a1d24;color:var(--muted)}
+    .account-section{margin-top:24px;display:none}
+    .account-section.show{display:block}
+    .account-list{display:flex;flex-direction:column;gap:8px}
+    .account-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;border:1px solid var(--line);border-radius:8px;background:#15181e;cursor:pointer;transition:border-color .15s ease,background .15s ease}
+    .account-item:hover{border-color:var(--cyan);background:#182026}
+    .account-info{display:flex;flex-direction:column;gap:3px}
+    .account-id{color:var(--ink);font:500 14px var(--mono)}
+    .account-type{color:var(--muted);font-size:11px}
+    .account-type.demo{color:#e8b978}
+    .account-type.real{color:var(--coral)}
+    .account-balance{color:var(--ink);font:500 15px var(--mono)}
+    .risk-warning{margin-top:20px;padding:12px 14px;border:1px solid #39414a;border-radius:8px;background:#171a20;color:var(--muted);font-size:11px;line-height:1.55}
+    .risk-warning strong{color:#e8b978}
+    .spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(15,17,23,.3);border-top-color:#0f1117;border-radius:50%;animation:spin .6s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @media(max-width:520px){
+      .topbar{height:56px}.nav-inner{padding:0 10px}.brand-name{font-size:13px}
+      .nav-links{gap:0}.nav-link{padding:0 9px;font-size:11px}
+      .login-wrap{margin:30px auto}.login-card{padding:24px 20px}
+    }
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+  </style>
+</head>
+<body>
+  <nav class="topbar" aria-label="Main navigation">
+    <div class="nav-inner">
+      <a class="brand" href="/" aria-label="Deriv Analytics home">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none"><path d="M2 14.5h3.2l2.3-7 3.1 8 2.2-5h5.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="brand-name">deriv <span>analytics</span></span>
+      </a>
+      <div class="nav-links">
+        <a class="nav-link" href="/">Digits</a>
+        <a class="nav-link" href="/risefall">Rise &amp; Fall</a>
+        <a class="nav-link" href="/ai-analyser">AI Analyser</a>
+        <a class="nav-link active" href="/login" aria-current="page">Login</a>
+        <a class="nav-link" href="/trade">Trade</a>
+        <a class="nav-link" href="/bot">Bots</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="login-wrap">
+    <div class="login-card">
+      <div class="login-eyebrow">Account access / 04</div>
+      <h1>Connect your account</h1>
+      <p>Paste your Deriv API token to connect. Your token stays in this browser tab only — it is never sent anywhere except Deriv's own servers.</p>
+
+      <div class="field-group">
+        <label class="field-label" for="token-input">API Token</label>
+        <input class="field-input" type="password" id="token-input" placeholder="Paste your Deriv API token" autocomplete="off" spellcheck="false">
+      </div>
+
+      <button class="connect-btn" id="connect-btn" type="button">Connect</button>
+
+      <div class="status-msg" id="status-msg" role="status" aria-live="polite"></div>
+
+      <div class="account-section" id="account-section">
+        <label class="field-label" style="margin-bottom:12px">Select an account</label>
+        <div class="account-list" id="account-list"></div>
+      </div>
+
+      <div class="risk-warning">
+        <strong>Risk warning:</strong> Trading binary options and CFDs carries a high level of risk and can result in the loss of all your invested capital. Only trade with money you can afford to lose.
+      </div>
+    </div>
+  </main>
+  <script src="/login.js"></script>
+</body>
+</html>
