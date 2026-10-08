@@ -1,0 +1,439 @@
+Replit Agent Prompt — Full Trading Interface, API Token Login & Trading Bots
+Edit the existing Deriv Analytics project. Add three major features: API token login, full trading interface, and automated trading bots. Do NOT rebuild existing pages. Do NOT modify the analytics logic.
+
+📁 Files to Create / Edit
+New files:
+
+site/login.html — Token login page
+
+site/login.js — Login logic
+
+site/trade.html — Trading interface page (or embed in risefall.html)
+
+site/trade.js — Trading logic
+
+site/bot.html — Bot management page
+
+site/bot.js — Bot logic
+
+Edit:
+
+index.js — Add OTP proxy endpoint, authenticated WebSocket handler
+
+site/index.html, site/risefall.html, site/ai-analyser.html — Add nav links
+
+PART 1 — API Token Login
+index.js — Add OTP proxy endpoint
+Add this route before the static file serving block:
+
+javascript
+if (req.url === '/api/otp' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+        try {
+            const { token, accountId } = JSON.parse(body);
+
+            const response = await fetch(
+                `https://api.derivws.com/trading/v1/options/accounts/${accountId}/otp`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Deriv-App-ID': '34BGMNrNna3eTueb5kkXq8'
+                    }
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                res.writeHead(response.status, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(data));
+                return;
+            }
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(data));
+        } catch (err) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: err.message }));
+        }
+    });
+    return;
+}
+index.js — Add account list endpoint
+javascript
+if (req.url === '/api/accounts' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+        try {
+            const { token } = JSON.parse(body);
+
+            const response = await fetch(
+                'https://api.derivws.com/trading/v1/options/accounts',
+                {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Deriv-App-ID': '34BGMNrNna3eTueb5kkXq8'
+                    }
+                }
+            );
+
+            const data = await response.json();
+
+            res.writeHead(response.status, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(data));
+        } catch (err) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: err.message }));
+        }
+    });
+    return;
+}
+site/login.html
+Create a clean login page with:
+
+Dark theme matching the existing site
+
+Input field for PAT token (type="password")
+
+"Connect" button
+
+Account selector (appears after token is validated)
+
+Demo/Real toggle
+
+Status messages
+
+site/login.js
+Logic:
+
+On "Connect" click, POST token to /api/accounts
+
+If valid, show account list
+
+On account select, POST to /api/otp with token + accountId
+
+Receive OTP URL, open authenticated WebSocket
+
+Store WebSocket connection in a global variable for other pages to use
+
+Store token in sessionStorage (not localStorage — clears on tab close)
+
+Redirect to /trade on success
+
+PART 2 — Full Trading Interface
+site/trade.html
+Layout (dark theme):
+
+Top bar: Balance display (live), account type badge (Demo/Real), logout button
+
+Left panel: Contract type selector (Rise/Fall, Higher/Lower)
+
+Center panel: Reuse the existing chart from risefall.html
+
+Right panel: Trade controls:
+
+Stake input (numeric, with +/- buttons)
+
+Duration input (ticks: 1, 2, 3, 5, 10)
+
+Payout preview (from proposal response)
+
+RISE button (green, CALL)
+
+FALL button (red, PUT)
+
+Bottom panel: Open positions table (from portfolio subscription)
+
+Columns: Contract ID, Type, Stake, Entry Spot, Current P&L, Action (Sell)
+
+Contract monitor modal: Opens when a contract is bought
+
+Shows live P&L, time remaining, current spot
+
+Sell button (if early sell is available)
+
+site/trade.js
+Core functions:
+
+javascript
+let authenticatedWs = null;
+let currentAccount = null;
+let currentBalance = 0;
+
+// Connect to authenticated WebSocket
+async function connectTrading(token, accountId) {
+    const res = await fetch('/api/otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, accountId })
+    });
+    const data = await res.json();
+    if (!data.data || !data.data.url) {
+        throw new Error('Failed to get OTP URL');
+    }
+    authenticatedWs = new WebSocket(data.data.url);
+    return new Promise((resolve, reject) => {
+        authenticatedWs.onopen = () => {
+            // Subscribe to balance
+            authenticatedWs.send(JSON.stringify({ balance: 1, subscribe: 1 }));
+            // Get portfolio
+            authenticatedWs.send(JSON.stringify({ portfolio: 1 }));
+            resolve();
+        };
+        authenticatedWs.onerror = reject;
+    });
+}
+
+// Request a proposal
+function requestProposal(params) {
+    authenticatedWs.send(JSON.stringify({
+        proposal: 1,
+        amount: params.amount,
+        basis: 'stake',
+        contract_type: params.contractType,  // 'CALL' or 'PUT'
+        currency: 'USD',
+        underlying_symbol: params.symbol,
+        duration: params.duration,
+        duration_unit: params.durationUnit  // 't' for ticks, 's' for seconds
+    }));
+}
+
+// Buy a contract
+function buyContract(proposalId, askPrice) {
+    authenticatedWs.send(JSON.stringify({
+        buy: proposalId,
+        price: askPrice
+    }));
+}
+
+// Monitor a contract
+function monitorContract(contractId) {
+    authenticatedWs.send(JSON.stringify({
+        proposal_open_contract: 1,
+        contract_id: contractId,
+        subscribe: 1
+    }));
+}
+
+// Sell early
+function sellContract(contractId) {
+    authenticatedWs.send(JSON.stringify({
+        sell: contractId,
+        price: 0    // 0 = sell at market
+    }));
+}
+Message handler:
+
+javascript
+authenticatedWs.onmessage = (event) => {
+    const msg = JSON.parse(event.data);
+
+    switch (msg.msg_type) {
+        case 'balance':
+            currentBalance = msg.balance.balance;
+            updateBalanceDisplay(currentBalance);
+            break;
+        case 'proposal':
+            // Store proposal for buy button
+            currentProposal = msg.proposal;
+            updatePayoutPreview(msg.proposal.payout);
+            break;
+        case 'buy':
+            // Contract bought — start monitoring
+            monitorContract(msg.buy.contract_id);
+            addOpenPosition(msg.buy);
+            break;
+        case 'proposal_open_contract':
+            updateContractStatus(msg.proposal_open_contract);
+            break;
+        case 'sell':
+            removeOpenPosition(msg.sell.contract_id);
+            break;
+        case 'portfolio':
+            msg.portfolio.contracts.forEach(addOpenPosition);
+            break;
+    }
+};
+PART 3 — Trading Bots
+site/bot.html
+Layout:
+
+Strategy selector (dropdown):
+
+Martingale
+
+D'Alembert
+
+Oscar's Grind
+
+Parameter inputs:
+
+Initial stake
+
+Multiplier (for Martingale)
+
+Profit threshold
+
+Loss threshold
+
+Max stake
+
+Contract settings:
+
+Symbol (R_10, R_25, R_50, R_75, R_100)
+
+Contract type (Rise/Fall)
+
+Duration (ticks)
+
+Start / Stop buttons
+
+Live bot status:
+
+Status (Running / Stopped / Paused)
+
+Rounds completed
+
+Current stake
+
+Total P&L
+
+Win/Loss count
+
+Bot history table
+
+site/bot.js
+Core bot loop:
+
+javascript
+let botRunning = false;
+let botState = {
+    round: 0,
+    currentStake: 0,
+    totalPnL: 0,
+    wins: 0,
+    losses: 0
+};
+
+async function startBot(config) {
+    botRunning = true;
+    botState.currentStake = config.initialStake;
+
+    // List available strategies first
+    const strategies = await listStrategies();
+    // Find the selected strategy ID
+    const strategyId = strategies.find(s => s.name === config.strategy).id;
+
+    // Start the automated run
+    authenticatedWs.send(JSON.stringify({
+        auto_start: 1,
+        contract_template: {
+            contract_type: 'CALL',
+            currency: 'USD',
+            underlying_symbol: config.symbol,
+            duration: config.duration,
+            duration_unit: 't'
+        },
+        strategy_id: strategyId,
+        strategy_parameters: {
+            initial_stake: config.initialStake,
+            multiplier: config.multiplier,
+            profit_threshold: config.profitThreshold,
+            loss_threshold: config.lossThreshold,
+            max_stake: config.maxStake
+        },
+        subscribe: 1
+    }));
+}
+
+async function listStrategies() {
+    return new Promise((resolve) => {
+        const reqId = Date.now();
+        const handler = (event) => {
+            const msg = JSON.parse(event.data);
+            if (msg.req_id === reqId) {
+                authenticatedWs.removeEventListener('message', handler);
+                resolve(msg.auto_list_strategies.strategies);
+            }
+        };
+        authenticatedWs.addEventListener('message', handler);
+        authenticatedWs.send(JSON.stringify({
+            auto_list_strategies: 1,
+            req_id: reqId
+        }));
+    });
+}
+
+function stopBot() {
+    botRunning = false;
+    authenticatedWs.send(JSON.stringify({
+        auto_stop: 1
+    }));
+}
+Bot status handler:
+
+javascript
+if (msg.msg_type === 'auto_start' || msg.msg_type === 'auto_get') {
+    const run = msg.auto_start || msg.auto_get;
+    updateBotStatus(run);
+}
+PART 4 — Navigation
+Add a login status indicator and nav links to all pages:
+
+In the nav bar of index.html, risefall.html, ai-analyser.html:
+
+html
+<div class="nav-links">
+    <a href="/" class="nav-link">Digits</a>
+    <a href="/risefall" class="nav-link">Rise &amp; Fall</a>
+    <a href="/ai-analyser" class="nav-link">AI Analyser</a>
+    <a href="/login" class="nav-link">Login</a>
+    <a href="/trade" class="nav-link">Trade</a>
+    <a href="/bot" class="nav-link">Bots</a>
+</div>
+Add a small balance badge that shows when logged in:
+
+html
+<div class="balance-badge" id="balance-badge" style="display:none;">
+    <span id="balance-amount">$0.00</span>
+</div>
+✅ Verification Checklist
+□ User can paste PAT token and connect
+□ Account list loads after token validation
+□ OTP URL is fetched and authenticated WebSocket connects
+□ Balance displays and updates live
+□ Proposal request returns payout preview
+□ Buy button places a trade and returns contract ID
+□ Contract monitor shows live P&L
+□ Early sell works
+□ Portfolio shows open positions
+□ Bot can start with Martingale strategy
+□ Bot stops at profit/loss thresholds
+□ Bot status updates live
+□ Token is stored in sessionStorage only (not localStorage)
+□ Token is never logged to console
+□ Demo/Real toggle works
+⚠️ Security Requirements
+Never log the PAT token to console or server logs
+
+Never send the token to any third-party service
+
+Store token in sessionStorage only — it clears when the tab closes
+
+Add a visible "Logout" button that clears the session and closes the WebSocket
+
+Display a clear risk warning on the trade page
+
+⚠️ Do Not Change
+The analytics pages (Digits, Rise & Fall, AI Analyser) — only add nav links
+
+The public WebSocket connection for market data
+
+The existing SSE streams
+
+The dark theme
